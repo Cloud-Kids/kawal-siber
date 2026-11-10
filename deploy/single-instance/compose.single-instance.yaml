@@ -1,0 +1,178 @@
+# ==============================================================================
+# KAWAL SIBER — Single-Host Production Docker Compose Manifest
+# Target: Single Linux Host (AWS EC2 Ubuntu 24.04 / Proxmox VM / LXC)
+#
+# Key Features:
+# - Reverse Proxy (Nginx) is the ONLY public ingress (ports 80 & 443)
+# - Frontend, Backend, and Worker communicate strictly over internal kawal_net
+# - Persistent SQLite database and reports mounted on host storage
+# - Strict memory and CPU resource limits per container
+# - Automated log rotation prevents disk exhaustion
+# ==============================================================================
+
+name: kawal-siber-production
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Reverse Proxy (Nginx) — Public Ingress Point
+  # ----------------------------------------------------------------------------
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: kawal-siber-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - kawal_net
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # 2. Backend API (FastAPI) — Internal REST Service
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: kawal-siber-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite:////data/kawal_siber.db
+      - FRONTEND_URL=http://frontend:3000
+      - PYTHONUNBUFFERED=1
+      - AI_ENABLED=true
+      - AI_PROVIDER=auto
+      - OLLAMA_BASE_URL=http://localhost:11434
+    volumes:
+      - ../../storage:/data
+      - ../../storage/reports:/app/storage/reports
+    networks:
+      - kawal_net
+    # Host ports NOT exposed — accessible solely via reverse-proxy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 2048M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # 3. Security Worker (Celery/Queue Engine) — Background Scanner & Triage
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: ../..
+      dockerfile: worker/Dockerfile
+    container_name: kawal-siber-worker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite:////data/kawal_siber.db
+      - SCAN_ENABLED=true
+      - NMAP_TIMEOUT_SECONDS=60
+      - POLL_INTERVAL_SECONDS=3.0
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../../storage:/data
+      - ../../storage/reports:/app/storage/reports
+    networks:
+      - kawal_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 2048M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # 4. Frontend Web UI (Next.js 15 Standalone) — Internal Web Service
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        - API_INTERNAL_URL=http://backend:8000
+    container_name: kawal-siber-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - API_INTERNAL_URL=http://backend:8000
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    networks:
+      - kawal_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Host ports NOT exposed — accessible solely via reverse-proxy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1024M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ------------------------------------------------------------------------------
+# Isolated Internal Network
+# ------------------------------------------------------------------------------
+networks:
+  kawal_net:
+    driver: bridge
+

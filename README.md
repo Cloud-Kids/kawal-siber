@@ -42,36 +42,48 @@
 
 KAWAL SIBER is organized as a single, cohesive **Monorepo** ensuring synchronization across schemas, background workers, tool integrations, and user interfaces.
 
+### Active Target: Single-Instance Linux Architecture (EC2 / Proxmox VM / LXC)
+The primary and immediate deployment target runs all services on **one standalone Linux host** orchestrated by Docker Engine and Compose. Only the Nginx Reverse Proxy publishes ports (80/443); all application containers reside on an isolated internal bridge network (`kawal_net`):
+
 ```
-                              PUBLIC INTERNET / OPERATORS
-                                           │
-                            [ AWS Application Load Balancer ]
-                              (Multi-AZ Ingress & TLS ACM)
-                                           │
-                   ┌───────────────────────┴───────────────────────┐
-                   │ Path: /api/*                                  │ Default: /*
-                   ▼                                               ▼
-      [ Backend ECS Cluster ]                         [ Frontend ECS Cluster ]
-      - desiredCount = 2                              - desiredCount = 2
-      - FastAPI (Port 8000)                           - Next.js 15 Standalone (3000)
-      - Stateless JWT verification                    - 22 Pre-compiled routes
-      - Connection Pool (20 + 10)                     - Synchronized static assets
-                   │                                               │
-                   ├───────────────────────┬───────────────────────┘
-                   │ SQL Connection Pool   │ Internal REST (X-Agent-Key)
-                   ▼                       ▼
-      [ Amazon RDS PostgreSQL ]       [ Security Tools Agent ]
-      - Multi-AZ High Availability    - desiredCount = 2 (Port 9000)
-      - Physical Streaming Replica    - In-container CIDR scope guard
-      - Automated Daily Backups       - Nmap 7.95, Suricata 7, Deep Eye
-                   ▲                       ▲
-                   │ SKIP LOCKED Queue     │ Subprocess Scans
-                   └───────────────────────┤
-                              [ Worker ECS Pool ]
-                              - desiredCount = 2 (Async Daemons)
-                              - Atomic Job Claim (FOR UPDATE SKIP LOCKED)
-                              - Heartbeat & Stale Job Recovery (10m)
+                    ┌────────────────────────────────────────────────────────┐
+                    │            STANDALONE LINUX HOST (UBUNTU 24.04)         │
+                    │                                                        │
+INTERNET / OPERATOR ──►│  [Host Firewall / AWS Security Group: 22, 80, 443]   │
+                    │                                                        │
+                    │  ┌──────────────────────────────────────────────────┐  │
+                    │  │              DOCKER ENGINE COMPOSE               │  │
+                    │  │                                                  │  │
+                    │  │  ┌────────────────────────────────────────────┐  │  │
+                    │  │  │  REVERSE PROXY (Nginx :80/:443)            │  │  │
+                    │  │  └───────────────┬───────────────────┬────────┘  │  │
+                    │  │                  │                   │           │  │
+                    │  │     (internal)   ▼       (internal)  ▼           │  │
+                    │  │   ┌─────────────────┐    ┌────────────────────┐  │  │
+                    │  │   │ FRONTEND        │    │ BACKEND            │  │  │
+                    │  │   │ Next.js 15 SSR  │    │ FastAPI REST API   │  │  │
+                    │  │   │ (:3000 internal)│    │ (:8000 internal)   │  │  │
+                    │  │   └─────────────────┘    └────────┬───────────┘  │  │
+                    │  │                                   │              │  │
+                    │  │                      (atomic queue/shared WAL)   │  │
+                    │  │                                   │              │  │
+                    │  │                          ┌────────▼───────────┐  │  │
+                    │  │                          │ WORKER (Celery/Q)  │  │  │
+                    │  │                          │ Nmap / Forensics   │  │  │
+                    │  │                          └────────┬───────────┘  │  │
+                    │  │                                   │              │  │
+                    │  └───────────────────────────────────┼──────────────┘  │
+                    │                                      │                 │
+                    │       ┌──────────────────────────────▼──────────┐      │
+                    │       │ HOST PERSISTENT STORAGE:                │      │
+                    │       │ /opt/kawal-siber/storage/kawal_siber.db │      │
+                    │       │ /opt/kawal-siber/storage/reports/       │      │
+                    │       └─────────────────────────────────────────┘      │
+                    └────────────────────────────────────────────────────────┘
 ```
+
+> [!NOTE]
+> Multi-host distributed EC2 redundancy and AWS ECS Multi-AZ architectures are preserved in [`deploy/aws-ec2/`](deploy/aws-ec2/) and [`docs/deployment/aws-ec2/`](docs/deployment/aws-ec2/) as **Future Enterprise Architecture / Extensions**.
 
 ---
 
@@ -215,18 +227,46 @@ powershell -ExecutionPolicy Bypass -File scripts/run-all-tests.ps1
 
 ---
 
-## 8. AWS Production Deployment & CI/CD
+## 8. Deployment Architecture (Active Single-Instance & Future Roadmap)
 
-### Architecture Overview
-For production defense operations, KAWAL SIBER deploys onto **AWS ECS on EC2 across at least two Availability Zones (`ap-southeast-1a` and `ap-southeast-1b`)** backed by **Amazon RDS PostgreSQL Multi-AZ**:
+### 8.1 Primary Active Target: Single-Instance Linux Deployment
+The immediate, fully self-contained deployment target for KAWAL SIBER is **ONE STANDALONE LINUX HOST** running Docker Engine and Docker Compose. This runs portably across:
+- **Amazon EC2**: Ubuntu Server 24.04 LTS (`m7i.xlarge` recommended, 4 vCPU / 16 GiB RAM / 100 GB gp3).
+- **Proxmox QEMU Virtual Machine**: Ubuntu Server 24.04 LTS (100% EC2 parity).
+- **Proxmox Unprivileged LXC**: With `features: nesting=1,keyctl=1` and ext4 storage backend.
 
-- **GitHub Actions OIDC**: Authenticates builds to AWS IAM without static, long-lived access keys.
-- **Amazon ECR Immutability**: All release images are tagged with the Git commit SHA (`sha-<short_sha>`) and scanned for vulnerabilities upon push.
-- **Dedicated Database Migration Task**: Alembic migrations run once as a standalone ECS task before application services undergo rolling updates.
-- **Automated Rollback Circuit Breaker**: If a new container revision fails health checks, ECS automatically rolls back to the previous stable revision.
-- **Operator-Controlled Rollback**: Triggerable manually via [`.github/workflows/rollback-production.yml`](./.github/workflows/rollback-production.yml).
+- **Canonical Runbook**: [`deploy/single-instance/README.md`](deploy/single-instance/README.md)
+- **Docker Compose Manifest**: [`deploy/single-instance/compose.single-instance.yaml`](deploy/single-instance/compose.single-instance.yaml)
+- **Nginx Ingress Configuration**: [`deploy/single-instance/nginx.conf`](deploy/single-instance/nginx.conf)
 
-Detailed cloud deployment and setup documentation is located in [`docs/deployment/aws-ec2/`](./docs/deployment/aws-ec2/).
+#### Standalone Stack Components:
+1. **Reverse Proxy (Nginx 1.27)**: The only service with host port bindings (80/443). Enforces TLS termination, security headers (CSP, HSTS, X-Frame-Options), gzip compression, proxies `/api/v1/` to backend:8000, and routes UI traffic to frontend:3000.
+2. **Frontend UI (Next.js 15.3)**: Standalone SSR server listening on port 3000 inside `kawal_net`. `API_INTERNAL_URL=http://backend:8000` is passed via build ARG and serialized into `.next/routes-manifest.json`.
+3. **Backend API (FastAPI 0.115)**: Uvicorn ASGI server on port 8000 inside `kawal_net`. Connects to SQLite at `/data/kawal_siber.db`.
+4. **Security Worker (Celery/Queue Daemon)**: Asynchronous background daemon claiming jobs atomically via SQLite transitions. Mounts `/data/kawal_siber.db` and `/data/reports`.
+5. **Persistent Storage (Host Mount)**: SQLite database (`storage/kawal_siber.db`) in Write-Ahead Logging (WAL) mode and forensic reports (`storage/reports/`).
+
+#### Strict Exclusion of Cloud Dependencies:
+The single-instance target strictly excludes AWS managed application services:
+- **NO Amazon ECS / ECR**: All container images are built locally on the host via Docker Compose.
+- **NO Amazon RDS**: Persistence is provided by SQLite on host storage in WAL mode.
+- **NO Amazon Application Load Balancer (ALB)**: Ingress routing and TLS are terminated by containerized Nginx.
+- **NO AWS Secrets Manager / SSM**: Environment variables are loaded from host `.env` file (`chmod 600`).
+- **NO AWS S3 / CloudWatch**: Persistent reports and logs reside on host storage with Docker json-file rotation.
+
+### 8.2 Proxmox Portability (VM vs LXC)
+- **Proxmox QEMU VM**: Recommended option. Full hardware virtualization with standard Linux kernel provides 100% behavioral parity with AWS EC2.
+- **Proxmox Unprivileged LXC**: Requires `features: nesting=1,keyctl=1` in `/etc/pve/lxc/<CTID>.conf`. Must use ext4 storage driver to avoid overlayfs-on-ZFS performance penalties. Nmap scans execute in TCP connect mode (`-sT`) if raw packet capabilities are restricted.
+
+### 8.3 Limitations of Single-Instance Architecture
+- **Host-Level Single Point of Failure (SPOF)**: All components run on one machine. A host crash causes downtime until the instance recovers.
+- **SQLite Concurrency Bound**: Well-suited for hackathon workloads, but high concurrent write volume (>100 RPS) requires upgrading to PostgreSQL.
+- **Local Tool Sandboxing**: Nmap and Suricata execute inside containers sharing host CPU/memory resources.
+
+### 8.4 Future Enterprise Roadmap (Levels 2 & 3)
+For high-concurrency, multi-region, or military operational deployments, KAWAL SIBER maintains two advanced architectures:
+- **Level 2: Distributed EC2 Container Redundancy**: 6 dedicated EC2 instances running 2 containers each (12 containers total) with PostgreSQL streaming replication. Runbook: [`deploy/aws-ec2/README.md`](deploy/aws-ec2/README.md).
+- **Level 3: AWS ECS Multi-AZ Enterprise**: Automated GitHub Actions CI/CD deploying onto multi-AZ ECS on EC2 fronted by AWS ALB and Amazon RDS PostgreSQL Multi-AZ. Reference: [`docs/deployment/aws-ec2/15-CICD-ARCHITECTURE.md`](docs/deployment/aws-ec2/15-CICD-ARCHITECTURE.md) and [`infra/aws/`](infra/aws/).
 
 ---
 
@@ -255,6 +295,7 @@ Detailed cloud deployment and setup documentation is located in [`docs/deploymen
 
 ## 11. Component Documentation Links
 
+- **[Single-Instance Production Deployment Runbook](deploy/single-instance/README.md)** ➔ *Active Primary Deployment Guide (EC2/Proxmox)*
 - **[Frontend Web Application (Next.js 15)](frontend/README.md)**
 - **[Backend API & Reporting Engine (FastAPI)](backend/README.md)**
 - **[Security Worker Daemon (Async Queue)](worker/README.md)**

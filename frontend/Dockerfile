@@ -20,6 +20,9 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+ARG API_INTERNAL_URL=http://backend:8000
+ENV API_INTERNAL_URL=${API_INTERNAL_URL}
+
 # Copy all deps (including devDeps for build)
 COPY package.json package-lock.json* ./
 RUN npm ci
