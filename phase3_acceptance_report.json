@@ -1,0 +1,126 @@
+{
+  "timestamp": "2026-11-07T06:25:46.305449+00:00",
+  "verdict": "PASSED",
+  "summary": {
+    "total": 19,
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "id": "SURI-01",
+      "name": "Suricata native Windows executable detected and version verified",
+      "status": "PASS",
+      "detail": "Path: C:\\Program Files\\Suricata\\suricata.exe | Version: Suricata version 8.0.7 RELEASE"
+    },
+    {
+      "id": "SURI-02",
+      "name": "Dedicated Suricata configuration validated in test mode (-T)",
+      "status": "PASS",
+      "detail": "Config: suricata.yaml | Loaded OK"
+    },
+    {
+      "id": "PCAP-01",
+      "name": "Synthetic lab PCAP created with multi-vector threats (ICMP, SQLi, SSH, XMAS)",
+      "status": "PASS",
+      "detail": "Path: hackathon_threat_lab.pcap (453 bytes)"
+    },
+    {
+      "id": "PCAP-02",
+      "name": "POST /api/v1/monitoring/pcap accepts authorized PCAP file -> 201 Created",
+      "status": "PASS",
+      "detail": "HTTP 201, Analysis ID=2"
+    },
+    {
+      "id": "PCAP-03",
+      "name": "Suricata offline analysis transitions PENDING -> RUNNING -> COMPLETED",
+      "status": "PASS",
+      "detail": "Status: COMPLETED | Ingested events: 9 | Alerts: 3"
+    },
+    {
+      "id": "EVE-01",
+      "name": "EVE JSON event stream parsed into structured security_events table",
+      "status": "PASS",
+      "detail": "Total events: 9 | Alerts: 3 | Signatures: ['KAWAL-SIBER ICMP Echo Request Detected', 'KAWAL-SIBER Inbound SSH Connection']"
+    },
+    {
+      "id": "CORR-01",
+      "name": "Correlator links alerts to matching asset and generates Incident record",
+      "status": "PASS",
+      "detail": "Asset: Local Gateway API (127.0.0.1) | Incidents count: 2 | Latest attack_type: PORT_SCAN"
+    },
+    {
+      "id": "CORR-02",
+      "name": "Asset security status updated to UNDER_ATTACK only upon validated high/critical alert",
+      "status": "PASS",
+      "detail": "Asset 1 status: UNDER_ATTACK"
+    },
+    {
+      "id": "API-01",
+      "name": "GET /api/v1/security-alerts returns actionable alerts",
+      "status": "PASS",
+      "detail": "HTTP 200, count=4"
+    },
+    {
+      "id": "API-02",
+      "name": "GET /api/v1/security-events returns all telemetry events",
+      "status": "PASS",
+      "detail": "HTTP 200, total=10"
+    },
+    {
+      "id": "API-03",
+      "name": "GET /api/v1/monitoring/statistics computes KPIs, protocol and severity distribution",
+      "status": "PASS",
+      "detail": "Total events: 10, Alerts: 4, Top sigs: 4"
+    },
+    {
+      "id": "SEC-01",
+      "name": "Path traversal in PCAP import rejected -> 422 Unprocessable Entity",
+      "status": "PASS",
+      "detail": "HTTP 422"
+    },
+    {
+      "id": "SEC-02",
+      "name": "Non-existent PCAP filename rejected -> 422 Unprocessable Entity",
+      "status": "PASS",
+      "detail": "HTTP 422"
+    },
+    {
+      "id": "SEC-03",
+      "name": "Disallowed file extension rejected -> 422 Unprocessable Entity",
+      "status": "PASS",
+      "detail": "HTTP 422"
+    },
+    {
+      "id": "FE-_monitoring",
+      "name": "Frontend page Threat Monitoring Dashboard (/monitoring) responds HTTP 200",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "id": "FE-_monitoring_alerts",
+      "name": "Frontend page Security Alerts View (/monitoring/alerts) responds HTTP 200",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "id": "FE-_monitoring_events",
+      "name": "Frontend page Security Events Telemetry View (/monitoring/events) responds HTTP 200",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "id": "FE-_monitoring_pcap",
+      "name": "Frontend page PCAP Import & Analysis View (/monitoring/pcap) responds HTTP 200",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "id": "AUT-01",
+      "name": "Automated pytest suite (74 passed, 0 failed)",
+      "status": "PASS",
+      "detail": "Return code: 0"
+    }
+  ]
+}

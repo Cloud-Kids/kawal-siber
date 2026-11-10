@@ -12,12 +12,12 @@ Write-Host "====================================================================
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $ProjectDir = Split-Path -Parent $ScriptDir
 
-# Resolve project root and virtualenv whether invoked from root or kawal-siber
-if (Test-Path "$ProjectDir\kawal-siber\backend\.venv\Scripts\python.exe") {
-    $AppDir = Join-Path $ProjectDir "kawal-siber"
-    $PythonExe = Join-Path $AppDir "backend\.venv\Scripts\python.exe"
-} elseif (Test-Path "$ProjectDir\backend\.venv\Scripts\python.exe") {
+# Resolve project root and virtualenv preferring consolidated outer root
+if (Test-Path "$ProjectDir\backend\.venv\Scripts\python.exe") {
     $AppDir = $ProjectDir
+    $PythonExe = Join-Path $AppDir "backend\.venv\Scripts\python.exe"
+} elseif (Test-Path "$ProjectDir\kawal-siber\backend\.venv\Scripts\python.exe") {
+    $AppDir = Join-Path $ProjectDir "kawal-siber"
     $PythonExe = Join-Path $AppDir "backend\.venv\Scripts\python.exe"
 } else {
     $PythonExe = "python"

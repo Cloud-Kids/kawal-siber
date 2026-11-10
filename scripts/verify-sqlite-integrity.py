@@ -9,9 +9,9 @@ import sys
 from pathlib import Path
 
 _root = Path(__file__).resolve().parent.parent
-DB_PATH = _root / "kawal-siber" / "storage" / "kawal_siber.db"
+DB_PATH = _root / "storage" / "kawal_siber.db"
 if not DB_PATH.exists():
-    DB_PATH = _root / "storage" / "kawal_siber.db"
+    DB_PATH = _root / "kawal-siber" / "storage" / "kawal_siber.db"
 
 def verify_database():
     print(f"=== KAWAL SIBER Database Integrity Check ===")

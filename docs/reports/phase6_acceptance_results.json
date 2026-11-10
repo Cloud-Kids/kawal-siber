@@ -1,0 +1,159 @@
+{
+  "timestamp": "2026-11-10T06:32:55.240368+00:00",
+  "total": 25,
+  "passed": 25,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "id": "P5_HARDEN_01",
+      "name": "AI Provider Offline Graceful Fallback",
+      "status": "PASS",
+      "detail": "Ollama offline detected correctly; graceful fallback to rule_based"
+    },
+    {
+      "id": "P5_HARDEN_02",
+      "name": "Prompt Injection Neutralization & Credential Redaction",
+      "status": "PASS",
+      "detail": "Injection neutralized; Risk: HIGH, secrets redacted successfully"
+    },
+    {
+      "id": "P5_HARDEN_03",
+      "name": "Metric Separation & Direction-Aware Correlation",
+      "status": "PASS",
+      "detail": "Metrics separated: Severity=LOW, Strength=0.2, Conf=0.65"
+    },
+    {
+      "id": "P5_HARDEN_04",
+      "name": "Deduplication & Repeated Occurrence Tracking",
+      "status": "PASS",
+      "detail": "Upsert evidence tracks occurrence counts [Aktivitas Berulang: Nx] without data loss"
+    },
+    {
+      "id": "P5_HARDEN_05",
+      "name": "SQLite Concurrency & Database Integrity",
+      "status": "PASS",
+      "detail": "Journal mode: WAL, busy_timeout: 5000ms, PRAGMA database_list verified isolated: kawal_siber_acceptance.db"
+    },
+    {
+      "id": "REPORT_DB_01",
+      "name": "Alembic Migration 0006 & generated_reports Schema",
+      "status": "PASS",
+      "detail": "Table generated_reports verified with all 26 columns intact"
+    },
+    {
+      "id": "REPORT_SAN_01",
+      "name": "CSV Formula Injection Defense",
+      "status": "PASS",
+      "detail": "Neutralized all formula execution prefixes (=, +, -, @, \\t, \\r)"
+    },
+    {
+      "id": "REPORT_EXP_01",
+      "name": "ReportLab PDF Generation",
+      "status": "PASS",
+      "detail": "Generated valid PDF document (3048 bytes)"
+    },
+    {
+      "id": "REPORT_EXP_02",
+      "name": "HTML Responsive Interactive Export",
+      "status": "PASS",
+      "detail": "Generated responsive standalone HTML report (8276 bytes)"
+    },
+    {
+      "id": "REPORT_EXP_03",
+      "name": "JSON Schema v1.0 & CSV Data Exports",
+      "status": "PASS",
+      "detail": "JSON Schema v1.0 validated; CSV tabular format validated"
+    },
+    {
+      "id": "REPORT_ENG_01",
+      "name": "Reporting Engine Snapshot & Checksum Integrity",
+      "status": "PASS",
+      "detail": "Report REP-ACCEPT-E2E-1794292363 compiled; SHA-256 verified: b7583f9168ab3ed3..."
+    },
+    {
+      "id": "REPORT_SEC_01",
+      "name": "Path Traversal Boundary Protection",
+      "status": "PASS",
+      "detail": "Strict directory boundary check enforces access strictly within storage/reports"
+    },
+    {
+      "id": "WORKER_INT_01",
+      "name": "Worker Queue Claim & Execution",
+      "status": "PASS",
+      "detail": "Worker atomic claim transitioned PENDING to RUNNING (id=2)"
+    },
+    {
+      "id": "UI_PLATFORM_01",
+      "name": "Next.js Frontend Integration & Version Verification",
+      "status": "PASS",
+      "detail": "Sidebar updated to v6.0.0; all 4 Phase 6 App Router pages present and built"
+    },
+    {
+      "id": "ADDENDUM_01",
+      "name": "Report Reproducibility Metadata & Disclaimer",
+      "status": "PASS",
+      "detail": "Metadata contains template version, tool versions, [start, end) interval, and SHA-256 non-signature disclaimer"
+    },
+    {
+      "id": "ADDENDUM_02",
+      "name": "Secure File Storage & Path Traversal Guards",
+      "status": "PASS",
+      "detail": "UUID filenames enforced; path resolution strictly contained within storage/reports"
+    },
+    {
+      "id": "ADDENDUM_03",
+      "name": "Structured Report Audit Trail",
+      "status": "PASS",
+      "detail": "Structured JSON audit events logged with event_type, UTC timestamp, and localhost auth limitation note"
+    },
+    {
+      "id": "ADDENDUM_04",
+      "name": "Worker Stale Job Recovery & Priority Claiming",
+      "status": "PASS",
+      "detail": "Priority-ordered claiming verified; stale RUNNING jobs successfully reset to PENDING"
+    },
+    {
+      "id": "ADDENDUM_05",
+      "name": "Honest Empty-State Reporting Without Dummy Data",
+      "status": "PASS",
+      "detail": "Zero counts accurately reflected; no dummy incidents or artificial threats injected"
+    },
+    {
+      "id": "REFINE_01",
+      "name": "Empty Database Evaluates to NOT ASSESSED (Never NORMAL SECURE)",
+      "status": "PASS",
+      "detail": "Confirmed: zero data returns status=NOT ASSESSED with reason=INSUFFICIENT SECURITY TELEMETRY"
+    },
+    {
+      "id": "REFINE_02",
+      "name": "SQLite Snapshot Transaction Released Prior to File Export",
+      "status": "PASS",
+      "detail": "Snapshot read transaction committed before export; concurrent writes succeed without table lock"
+    },
+    {
+      "id": "REFINE_03",
+      "name": "PDF Structural & Layout Validation",
+      "status": "PASS",
+      "detail": "Two-pass canvas verified across 2 pages; running headers, dynamic page numbering ('Halaman X dari Y'), and Unicode text intact in document stream (Visual raster inspection: NOT PERFORMED)"
+    },
+    {
+      "id": "REFINE_04",
+      "name": "Append-Only Audit Trail with Hash Chaining & Tamper Detection",
+      "status": "PASS",
+      "detail": "Cryptographic hash chain verified; retroactive record alteration detected via SHA-256 hash mismatch"
+    },
+    {
+      "id": "REFINE_05",
+      "name": "Truthful Component Versioning & External SHA-256 Metadata",
+      "status": "PASS",
+      "detail": "Component versions verified (10 keys); uninstalled tools marked NOT_AVAILABLE without fabrication"
+    },
+    {
+      "id": "REFINE_06",
+      "name": "Next.js 22 Routes Functional Manifest & API Reverse Proxy",
+      "status": "PASS",
+      "detail": "All 22 user-facing routes verified in production manifest; API reverse proxy confirmed"
+    }
+  ]
+}

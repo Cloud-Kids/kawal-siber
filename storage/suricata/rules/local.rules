@@ -1,0 +1,27 @@
+# KAWAL SIBER — Local Detection Rules for Offline PCAP Analysis
+# Kartika Cyber Hackathon 2026
+
+# 1. ICMP Ping detection
+alert icmp any any -> any any (msg:"KAWAL-SIBER ICMP Echo Request Detected"; itype:8; icode:0; classtype:misc-activity; sid:1000001; rev:1;)
+
+# 2. HTTP SQL Injection attempt
+alert http any any -> any any (msg:"KAWAL-SIBER Possible SQL Injection in URI"; http.uri; content:"UNION SELECT"; nocase; classtype:web-application-attack; sid:1000002; rev:1;)
+
+# 3. HTTP Malicious Scanner User-Agent
+alert http any any -> any any (msg:"KAWAL-SIBER Suspicious Scanner User-Agent (sqlmap/nikto)"; http.user_agent; pcre:"/(sqlmap|nikto|nmap|masscan)/i"; classtype:attempted-recon; sid:1000003; rev:1;)
+
+# 4. SSH Inbound Connection Attempt
+alert tcp any any -> any 22 (msg:"KAWAL-SIBER Inbound SSH Connection"; flow:to_server; flags:S; classtype:misc-activity; sid:1000004; rev:1;)
+
+# 5. DNS Query Suspicious TLD / Domain
+alert dns any any -> any 53 (msg:"KAWAL-SIBER Suspicious DNS Query to .xyz or .top TLD"; dns.query; pcre:"/\.(xyz|top|ru|onion)$/i"; classtype:bad-unknown; sid:1000005; rev:1;)
+
+# 6. TCP XMAS Tree Scan Detection
+alert tcp any any -> any any (msg:"KAWAL-SIBER TCP XMAS Scan Detected"; flags:FPU; classtype:attempted-recon; sid:1000006; rev:1;)
+
+# 7. TCP Null Scan Detection
+alert tcp any any -> any any (msg:"KAWAL-SIBER TCP Null Scan Detected"; flags:0; classtype:attempted-recon; sid:1000007; rev:1;)
+
+# 8. HTTP Suspicious Shell / Command Execution
+alert http any any -> any any (msg:"KAWAL-SIBER Remote Code Execution Attempt via URI"; http.uri; pcre:"/(cmd\.exe|\/bin\/sh|\/bin\/bash|eval\(|powershell)/i"; classtype:attempted-admin; sid:1000008; rev:1;)
+
