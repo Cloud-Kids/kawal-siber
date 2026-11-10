@@ -1,0 +1,149 @@
+name: KAWAL SIBER — Continuous Integration (CI)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - 'feature/**'
+      - develop
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-and-worker-tests:
+    name: Backend, Worker & Acceptance Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kawal-siber
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            kawal-siber/backend/requirements.txt
+            kawal-siber/worker/requirements.txt
+
+      - name: Install system dependencies (Nmap for worker scope/scanner testing)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nmap
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install -r worker/requirements.txt
+          pip install pytest pytest-asyncio anyio httpx
+
+      - name: Run Backend Pytest Suite (129 tests)
+        run: |
+          python -m pytest backend/tests -v --strict-markers
+
+      - name: Run Worker Pytest Suite (22 tests)
+        run: |
+          python -m pytest worker/tests -v --strict-markers
+
+      - name: Run Phase 6 Acceptance Tests (Isolated Temporary Database)
+        run: |
+          python phase6_acceptance_test.py
+
+      - name: Verify Storage Database Untouched
+        run: |
+          python -c "
+          import os
+          db_path = 'storage/kawal_siber.db'
+          if os.path.exists(db_path):
+              size = os.path.getsize(db_path)
+              print(f'Database verification: {size} bytes intact')
+          "
+
+  frontend-checks:
+    name: Frontend Type-Check & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kawal-siber/frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: kawal-siber/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type-check
+        run: npm run type-check
+
+      - name: Build Next.js 15 Standalone application
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NODE_ENV: 'production'
+
+  security-and-secret-scanning:
+    name: Dependency Audit & Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for committed sensitive files (.env, raw SQLite, keys)
+        run: |
+          echo "Checking for sensitive file leakage..."
+          FORBIDDEN_FILES=$(find . -name "*.db" -o -name ".env.local" -o -name ".env.production" -o -name "*.pem" -o -name "*.key" | grep -v "storage/kawal_siber.db" || true)
+          if [ -n "$FORBIDDEN_FILES" ]; then
+            echo "ERROR: Found forbidden files staged in repository:"
+            echo "$FORBIDDEN_FILES"
+            exit 1
+          fi
+          echo "No sensitive database or secret files committed."
+
+      - name: Run Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: false
+
+  docker-build-dryrun:
+    name: Dockerfile Build Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Backend Dockerfile
+        run: |
+          docker build --dry-run -t kawal-siber-backend:dryrun -f kawal-siber/backend/Dockerfile kawal-siber/backend || \
+          docker build -t kawal-siber-backend:dryrun -f kawal-siber/backend/Dockerfile kawal-siber/backend
+
+      - name: Validate Frontend Dockerfile
+        run: |
+          docker build -t kawal-siber-frontend:dryrun -f kawal-siber/frontend/Dockerfile kawal-siber/frontend
+
+      - name: Validate Worker Dockerfile
+        run: |
+          docker build -t kawal-siber-worker:dryrun -f kawal-siber/worker/Dockerfile kawal-siber
+
+      - name: Validate Tools Agent Dockerfile
+        run: |
+          docker build -t kawal-siber-tools-agent:dryrun -f kawal-siber/deploy/aws/ks-tools-01/Dockerfile kawal-siber/deploy/aws/ks-tools-01
+

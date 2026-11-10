@@ -1,0 +1,100 @@
+name: KAWAL SIBER — Production Service Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_to_rollback:
+        description: 'Service to rollback'
+        required: true
+        type: choice
+        options:
+          - kawal-siber-backend-service
+          - kawal-siber-frontend-service
+          - kawal-siber-worker-service
+          - kawal-siber-tools-agent-service
+      target_task_revision:
+        description: 'Target Task Definition revision (e.g. "kawal-siber-backend:24" or leave empty for previous)'
+        required: false
+        type: string
+      rollback_reason:
+        description: 'Reason for triggering manual rollback (Mandatory for audit trail)'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  execute-rollback:
+    name: Execute Service Rollback
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+          audience: sts.amazonaws.com
+
+      - name: Resolve Previous Task Definition Revision
+        id: resolve-target
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER_NAME || 'kawal-siber-prod' }}
+          SERVICE: ${{ github.event.inputs.service_to_rollback }}
+          MANUAL_REVISION: ${{ github.event.inputs.target_task_revision }}
+        run: |
+          echo "Rollback initiated by ${{ github.actor }}"
+          echo "Reason: ${{ github.event.inputs.rollback_reason }}"
+
+          if [ -n "$MANUAL_REVISION" ]; then
+            TARGET_DEF="$MANUAL_REVISION"
+          else
+            CURRENT_DEF=$(aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query "services[0].taskDefinition" \
+              --output text)
+            echo "Current Task Definition: $CURRENT_DEF"
+            FAMILY=$(echo "$CURRENT_DEF" | sed -E 's/.*\/([^:]+):.*/\1/')
+            REV=$(echo "$CURRENT_DEF" | sed -E 's/.*:([0-9]+)$/\1/')
+            PREV_REV=$((REV - 1))
+            TARGET_DEF="$FAMILY:$PREV_REV"
+          fi
+
+          echo "Target Task Definition for Rollback: $TARGET_DEF"
+          echo "target_task_def=$TARGET_DEF" >> $GITHUB_OUTPUT
+
+      - name: Revert ECS Service Task Definition
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER_NAME || 'kawal-siber-prod' }}
+          SERVICE: ${{ github.event.inputs.service_to_rollback }}
+          TARGET_DEF: ${{ steps.resolve-target.outputs.target_task_def }}
+        run: |
+          echo "Reverting service $SERVICE to $TARGET_DEF..."
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "$TARGET_DEF" \
+            --force-new-deployment
+
+          echo "Waiting for rollback service to stabilize..."
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          echo "Service $SERVICE successfully rolled back to $TARGET_DEF and stabilized."
+
+      - name: Post-Rollback Health Verification
+        env:
+          ALB_URL: ${{ vars.PRODUCTION_APP_URL || 'https://kawal-siber.mil.id' }}
+        run: |
+          echo "Verifying application availability post-rollback..."
+          curl -s -f --max-time 10 "$ALB_URL/api/v1/health" || { echo "ERROR: Health check failed post-rollback!"; exit 1; }
+          echo "Post-rollback verification PASSED."
+

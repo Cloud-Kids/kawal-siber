@@ -1,0 +1,98 @@
+# ==============================================================================
+# KAWAL SIBER — ks-db-01 Docker Compose Configuration
+# Architecture: PRIMARY / STANDBY PostgreSQL Streaming Replication
+# Container Redundancy: postgres-primary (Port 5432) & postgres-standby (Port 5433)
+# ==============================================================================
+services:
+  postgres-primary:
+    image: postgres:16-alpine
+    container_name: postgres-primary
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kawal_siber}
+      POSTGRES_USER: ${POSTGRES_USER:-kawal_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KawalSiberSecure2026!}
+      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-ReplicationSecure2026!}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /ebs/primary/pgdata:/var/lib/postgresql/data/pgdata
+      - ./conf/postgresql.conf.primary:/etc/postgresql/postgresql.conf:ro
+      - ./conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./scripts/init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh:ro
+      - /ebs/shared/wal_archive:/var/lib/postgresql/wal_archive
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+    ports:
+      - "5432:5432"
+    networks:
+      - db_internal_net
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4096M
+        reservations:
+          cpus: "1.0"
+          memory: 2048M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kawal_user} -d ${POSTGRES_DB:-kawal_siber} -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  postgres-standby:
+    image: postgres:16-alpine
+    container_name: postgres-standby
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kawal_siber}
+      POSTGRES_USER: ${POSTGRES_USER:-kawal_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KawalSiberSecure2026!}
+      PRIMARY_HOST: postgres-primary
+      PRIMARY_PORT: "5432"
+      REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-ReplicationSecure2026!}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /ebs/standby/pgdata:/var/lib/postgresql/data/pgdata
+      - ./conf/postgresql.conf.standby:/etc/postgresql/postgresql.conf:ro
+      - ./conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./scripts/setup-standby.sh:/usr/local/bin/setup-standby.sh:ro
+      - ./scripts/promote-standby.sh:/usr/local/bin/promote-standby.sh:ro
+      - /ebs/shared/wal_archive:/var/lib/postgresql/wal_archive:ro
+    entrypoint: ["/usr/local/bin/setup-standby.sh"]
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+    ports:
+      - "5433:5432"
+    networks:
+      - db_internal_net
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4096M
+        reservations:
+          cpus: "1.0"
+          memory: 2048M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kawal_user} -d ${POSTGRES_DB:-kawal_siber} -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  db_internal_net:
+    name: ks_db_net
+    driver: bridge
+

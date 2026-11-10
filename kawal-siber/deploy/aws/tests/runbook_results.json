@@ -1,0 +1,122 @@
+[
+  {
+    "id": "SCENARIO-01",
+    "name": "Database Primary Container Kill & Standby Promotion",
+    "role": "ks-db-01",
+    "prerequisites": "postgres-primary (5432) active, postgres-standby (5433) streaming, backend connected.",
+    "execution_steps": [
+      "docker kill postgres-primary",
+      "docker exec postgres-standby /usr/local/bin/promote-standby.sh",
+      "Update backend DATABASE_URL to port 5433 or route via internal VIP",
+      "Send POST /api/v1/scans/ to verify write operations succeed"
+    ],
+    "expected_observation": "Standby transitions to read-write in < 5s. Zero data loss. Backend recovers write queries.",
+    "status": "NOT RUN",
+    "disclosed_reason": "Automated AWS staging cluster is not currently provisioned in this local development environment.",
+    "rollback_steps": "docker start postgres-primary; re-attach replication."
+  },
+  {
+    "id": "SCENARIO-02",
+    "name": "Frontend Container A Crash & Active Traffic Failover",
+    "role": "ks-frontend-01",
+    "prerequisites": "frontend-a (3001) and frontend-b (3002) both healthy behind Nginx upstream frontend_cluster.",
+    "execution_steps": [
+      "docker stop frontend-a",
+      "Execute 100 concurrent HTTP requests to http://ks-lb-01/",
+      "Inspect Nginx upstream response codes and latency"
+    ],
+    "expected_observation": "Nginx marks frontend-a down after 2 fails; 100% traffic routed to frontend-b. 0 HTTP 502 errors.",
+    "status": "NOT RUN",
+    "disclosed_reason": "AWS EC2 instance ks-frontend-01 not provisioned locally.",
+    "rollback_steps": "docker start frontend-a"
+  },
+  {
+    "id": "SCENARIO-03",
+    "name": "Backend API Container A Kill & JWT Session Continuity",
+    "role": "ks-backend-01",
+    "prerequisites": "backend-a (8001) and backend-b (8002) active; valid JWT token issued.",
+    "execution_steps": [
+      "Obtain JWT token from backend-a",
+      "docker kill backend-a",
+      "Send 50 authenticated requests with same JWT token to http://ks-lb-01/api/v1/assets"
+    ],
+    "expected_observation": "All requests routed to backend-b succeed with HTTP 200. Stateless JWT verification remains valid without re-login.",
+    "status": "NOT RUN",
+    "disclosed_reason": "AWS EC2 instance ks-backend-01 not provisioned locally.",
+    "rollback_steps": "docker start backend-a"
+  },
+  {
+    "id": "SCENARIO-04",
+    "name": "Worker A Mid-Execution Crash & Stale Job Reclamation",
+    "role": "ks-worker-01",
+    "prerequisites": "worker-a and worker-b polling PostgreSQL queue; job #999 in RUNNING status by worker-a.",
+    "execution_steps": [
+      "docker kill worker-a mid-scan or report generation",
+      "Wait for STALE_JOB_TIMEOUT_MINUTES (or simulate timeout in test)",
+      "worker-b executes recover_stale_running_reports / recover_stale_running_scans"
+    ],
+    "expected_observation": "Stale job reclaimed by worker-b; status reset to PENDING and completed without duplicate record creation.",
+    "status": "NOT RUN",
+    "disclosed_reason": "Distributed PostgreSQL worker pool not active locally.",
+    "rollback_steps": "docker start worker-a"
+  },
+  {
+    "id": "SCENARIO-05",
+    "name": "Security Tools Agent A Failure & Warm Failover",
+    "role": "ks-tools-01",
+    "prerequisites": "tools-agent-a (9001) and tools-agent-b (9002) both healthy with Nmap installed.",
+    "execution_steps": [
+      "docker stop tools-agent-a",
+      "Worker triggers authorized network scan via internal client",
+      "Client encounters connection error on 9001, fails over to 9002"
+    ],
+    "expected_observation": "Scan executes smoothly on tools-agent-b with full scope enforcement intact. Result stored in DB.",
+    "status": "NOT RUN",
+    "disclosed_reason": "Tools agent cluster not provisioned locally.",
+    "rollback_steps": "docker start tools-agent-a"
+  },
+  {
+    "id": "SCENARIO-06",
+    "name": "Load Balancer Nginx Container A Crash & ALB Reroute",
+    "role": "ks-lb-01",
+    "prerequisites": "nginx-a (8081) and nginx-b (8082) registered as targets in AWS ALB target group.",
+    "execution_steps": [
+      "docker kill nginx-a",
+      "ALB health check marks 8081 unhealthy after 2 consecutive failed probes (10s)",
+      "Continuously curl ALB public DNS"
+    ],
+    "expected_observation": "ALB shifts 100% ingress traffic to nginx-b (8082). Overall service availability maintained.",
+    "status": "NOT RUN",
+    "disclosed_reason": "AWS ALB target group requires cloud VPC deployment.",
+    "rollback_steps": "docker start nginx-a"
+  },
+  {
+    "id": "SCENARIO-07",
+    "name": "High Concurrency Job Submission & Zero-Collision Claim",
+    "role": "ks-worker-01",
+    "prerequisites": "worker-a and worker-b active; PostgreSQL database connected.",
+    "execution_steps": [
+      "Submit 10 scan jobs simultaneously via API",
+      "Both workers poll simultaneously every 1s using SELECT ... FOR UPDATE SKIP LOCKED",
+      "Inspect execution log and database ScanJob table"
+    ],
+    "expected_observation": "Worker-a and worker-b each claim jobs without duplicate assignments or locking deadlocks. All 10 jobs reach COMPLETED.",
+    "status": "NOT RUN",
+    "disclosed_reason": "AWS multi-worker pool not active locally.",
+    "rollback_steps": "N/A"
+  },
+  {
+    "id": "SCENARIO-08",
+    "name": "Network Partition Between Hosts & Clean Failure Handling",
+    "role": "Cross-Host Network",
+    "prerequisites": "All 6 EC2 hosts running.",
+    "execution_steps": [
+      "Inject network latency / drop between ks-backend-01 and ks-db-01 via iptables",
+      "Observe backend connection pool timeout and CloudWatch alert firing"
+    ],
+    "expected_observation": "Backend returns HTTP 503 instead of hanging infinitely; CloudWatch triggers 'Backend 5xx > 1%' alert.",
+    "status": "NOT RUN",
+    "disclosed_reason": "Multi-host cloud network not provisioned locally.",
+    "rollback_steps": "iptables -F"
+  }
+]

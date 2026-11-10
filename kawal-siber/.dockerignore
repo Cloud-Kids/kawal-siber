@@ -1,0 +1,62 @@
+# Root .dockerignore — applies to every build context sent to the Docker daemon.
+# Keeps build contexts lean and prevents secrets / dev artefacts from leaking
+# into final images.
+
+# ── Version control ──────────────────────────────────────────────────────────
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# ── Python bytecode & caches ─────────────────────────────────────────────────
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+**/dist
+**/build
+**/.eggs
+**/.venv
+**/venv
+
+# ── Node / Next.js ────────────────────────────────────────────────────────────
+**/node_modules
+**/.next
+**/out
+**/.npm
+**/coverage
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ── Test & dev databases ──────────────────────────────────────────────────────
+**/test_*.db
+**/dev_*.db
+**/*.db-shm
+**/*.db-wal
+
+# ── Documentation ─────────────────────────────────────────────────────────────
+**/README.md
+**/CHANGELOG.md
+**/CONTRIBUTING.md
+**/*.md
+
+# ── OS artefacts ──────────────────────────────────────────────────────────────
+**/.DS_Store
+**/Thumbs.db
+**/Desktop.ini
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+**/*.log
+**/logs

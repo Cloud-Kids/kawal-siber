@@ -1,0 +1,102 @@
+# ==============================================================================
+# KAWAL SIBER — Subfolder Git Ignore Rules
+# ==============================================================================
+
+# Python Bytecode, Caches & Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.deep-venv/
+**/.deep-venv/
+**/.venv/
+
+# Node.js & Next.js Build Outputs
+node_modules/
+.next/
+out/
+.npm/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets, API Keys & Environment Configuration (STRICT)
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+!.env.docker
+!.env.aws.template
+
+# Operational Databases & Locks (STRICT ZERO-LEAK GUARD)
+*.db
+*.db-shm
+*.db-wal
+**/storage/*.db
+**/storage/*.db-shm
+**/storage/*.db-wal
+integration_test.db*
+test_*.db*
+
+# Runtime Storage, Reports & Telemetry (Excluded from Git)
+storage/reports/*
+storage/scans/*
+storage/pcap/*
+storage/evidence/*
+storage/uploads/*
+storage/exports/*
+storage/backups/*
+storage/logs/*
+storage/suricata/logs/*
+**/storage/reports/*
+**/storage/scans/*
+**/storage/pcap/*
+**/storage/evidence/*
+**/storage/uploads/*
+**/storage/exports/*
+**/storage/backups/*
+**/storage/logs/*
+**/storage/suricata/logs/*
+eve.json
+**/eve.json
+
+# Preserve Static Configuration and IDS Rule Files
+!storage/suricata.yaml
+!storage/suricata/rules/**
+!**/storage/suricata.yaml
+!**/storage/suricata/rules/**
+!storage/reports/.gitkeep
+
+# External AI Models & Weights
+models/*.gguf
+models/*.bin
+**/.ollama
+**/models/*.gguf
+
+# OS & Editor Artefacts
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Webpack Caches
+*.pack
+*.pack.old
+*.pack.gz

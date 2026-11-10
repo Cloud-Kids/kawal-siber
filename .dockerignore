@@ -1,0 +1,73 @@
+# ==============================================================================
+# Root .dockerignore for KAWAL SIBER
+# Strictly excludes all local databases, test artifacts, secrets, and telemetry
+# ==============================================================================
+
+# Version control
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# Python bytecode & virtual environments
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+**/dist
+**/build
+**/.eggs
+**/.venv
+**/venv
+**/env
+
+# Node.js & Next.js build artifacts
+**/node_modules
+**/.next
+**/out
+**/.npm
+**/coverage
+
+# Secrets & Environment variables (STRICT)
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.aws.template
+
+# Local SQLite databases & temporary DBs (STRICT PROTECTION)
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/storage/*.db
+**/storage/*.db-shm
+**/storage/*.db-wal
+
+# Runtime logs & captured telemetry
+**/*.log
+**/logs
+**/eve.json
+**/storage/suricata/logs/**
+**/storage/reports/*
+**/storage/scans/*
+**/storage/pcap/*
+**/storage/evidence/*
+**/storage/uploads/*
+**/storage/exports/*
+**/storage/backups/*
+
+# Preserve static configuration and rule templates
+!**/storage/suricata.yaml
+!**/storage/suricata/rules/**
+
+# Local AI Models
+**/models/*.gguf
+**/models/*.bin
+**/.ollama
+
+# OS artifacts
+**/.DS_Store
+**/Thumbs.db
+**/Desktop.ini

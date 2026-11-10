@@ -1,0 +1,92 @@
+%YAML 1.1
+---
+# KAWAL SIBER — Dedicated Offline PCAP Analysis Configuration
+# Suricata 8.x Windows Localhost Engine
+
+suricata-version: "8.0"
+
+vars:
+  address-groups:
+    HOME_NET: "[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+
+  port-groups:
+    HTTP_PORTS: "80,8080,8000"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+
+default-log-level: notice
+
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - alert:
+            payload: yes
+            payload-buffer-size: 2kb
+            payload-printable: yes
+            packet: yes
+            metadata: yes
+            http-body: yes
+            http-body-printable: yes
+            tagged-packets: yes
+        - anomaly:
+            enabled: yes
+            types:
+              decode: yes
+              stream: yes
+              applayer: yes
+        - http:
+            extended: yes
+        - dns:
+            version: 2
+        - tls:
+            extended: yes
+        - flow
+        - stats:
+            totals: yes
+            threads: no
+
+# Classification config
+classification-file: "C:\\Program Files\\Suricata\\classification.config"
+reference-config-file: "C:\\Program Files\\Suricata\\reference.config"
+
+# Rules
+rule-files:
+  - "C:\\Users\\APIP\\Documents\\KAWAL SIBER\\kawal-siber\\storage\\suricata\\rules\\local.rules"
+  - "C:\\Program Files\\Suricata\\rules\\app-layer-events.rules"
+  - "C:\\Program Files\\Suricata\\rules\\decoder-events.rules"
+  - "C:\\Program Files\\Suricata\\rules\\dns-events.rules"
+  - "C:\\Program Files\\Suricata\\rules\\http-events.rules"
+  - "C:\\Program Files\\Suricata\\rules\\stream-events.rules"
+
+# Runmode for offline pcap
+runmode: single
+
+# App-layer parsers
+app-layer:
+  protocols:
+    http:
+      enabled: yes
+    dns:
+      tcp:
+        enabled: yes
+      udp:
+        enabled: yes
+    tls:
+      enabled: yes
+    ssh:
+      enabled: yes
+    ftp:
+      enabled: yes
+    smtp:
+      enabled: yes
+

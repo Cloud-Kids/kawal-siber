@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-11-07T14:49:28.761897+00:00",
+  "total": 15,
+  "passed": 14,
+  "failed": 0,
+  "skipped": 1,
+  "results": [
+    {
+      "id": "TRIAGE_DET_01",
+      "name": "Deterministic Triage Classification & Scoring",
+      "status": "PASS",
+      "detail": "Risk: CRITICAL, Score: 99/100, Actions: 4"
+    },
+    {
+      "id": "DATA_SOURCES_01",
+      "name": "Traceable Security Data Sources (Suricata, Deep Eye, Nmap)",
+      "status": "PASS",
+      "detail": "Supported source types: ['SURICATA_EVENT', 'WEB_FINDING', 'NMAP_RESULT', 'MANUAL_EVIDENCE']"
+    },
+    {
+      "id": "CORRELATION_01",
+      "name": "Incident Correlation & Evidence Linking",
+      "status": "PASS",
+      "detail": "Incident #3 correlated: 0 evidence items, confidence: 0.3"
+    },
+    {
+      "id": "DEDUPLICATION_01",
+      "name": "Evidence & Incident Deduplication",
+      "status": "PASS",
+      "detail": "Second run evidence created: 0 (deduplication confirmed)"
+    },
+    {
+      "id": "PROVIDER_ABS_01",
+      "name": "AI Provider Abstraction Layer",
+      "status": "PASS",
+      "detail": "Active provider: rule_based (model: deterministic_v1)"
+    },
+    {
+      "id": "OLLAMA_01",
+      "name": "Local Ollama LLM Integration",
+      "status": "SKIP",
+      "detail": "Ollama service offline on localhost:11434 (Graceful SKIP - Rule-based fallback active)"
+    },
+    {
+      "id": "FALLBACK_01",
+      "name": "Deterministic Rule-Based Fallback Engine",
+      "status": "PASS",
+      "detail": "Fallback risk: HIGH, score: 70/100"
+    },
+    {
+      "id": "PYDANTIC_VAL_01",
+      "name": "Pydantic AI Output Schema Validation",
+      "status": "PASS",
+      "detail": "Schema strictly validates fields, types, and value bounds"
+    },
+    {
+      "id": "SQLITE_STORE_01",
+      "name": "SQLite Persistence (Triage, Evidence, Timeline)",
+      "status": "PASS",
+      "detail": "Database contains: 1 triage runs, 16 evidence items, 14 timeline events"
+    },
+    {
+      "id": "TIMELINE_01",
+      "name": "Incident Timeline Ordering & Retrieval",
+      "status": "PASS",
+      "detail": "Incident #3 has 13 timeline entries in chronological order"
+    },
+    {
+      "id": "OPERATOR_REV_01",
+      "name": "Operator Lifecycle Approval & Review Controls",
+      "status": "PASS",
+      "detail": "Successfully validated full lifecycle transitions (OPEN -> ACKNOWLEDGED -> INVESTIGATING -> RESOLVED) on incident #4"
+    },
+    {
+      "id": "NO_AUTO_MITIGATE_01",
+      "name": "Strict Invariant: No Automatic Mitigation by AI",
+      "status": "PASS",
+      "detail": "Incident #1 remains is_mitigated=0 and status=OPEN after AI triage enqueue"
+    },
+    {
+      "id": "FRONTEND_01",
+      "name": "Next.js Frontend Pages (/incidents, /intelligence, /dashboard)",
+      "status": "PASS",
+      "detail": "All 5 App Router page components verified on disk and compiled"
+    },
+    {
+      "id": "REGRESSION_01",
+      "name": "Zero Regression on Fase 1\u20134 Endpoints",
+      "status": "PASS",
+      "detail": "Health, Assets (F1-2), Scopes (F2), Monitoring/Suricata (F3), WebSec/DeepEye (F4) all HTTP 200"
+    },
+    {
+      "id": "AUTOMATED_TESTS_01",
+      "name": "Automated Backend Pytest Suite (Phase 5)",
+      "status": "PASS",
+      "detail": "Output: .......                                                                  [100%]\n7 passed in 9.07s"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "family": "kawal-siber-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["EC2"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::123456789012:role/kawal-siber-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::123456789012:role/kawal-siber-backend-task-role",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/kawal-siber-backend:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "PORT", "value": "8000" },
+        { "name": "PYTHONUNBUFFERED", "value": "1" },
+        { "name": "DB_POOL_SIZE", "value": "20" },
+        { "name": "DB_MAX_OVERFLOW", "value": "10" },
+        { "name": "DB_POOL_TIMEOUT", "value": "30" },
+        { "name": "DB_POOL_RECYCLE", "value": "1800" },
+        { "name": "FRONTEND_URL", "value": "https://kawal-siber.mil.id" },
+        { "name": "TOOLS_AGENT_URL", "value": "http://tools.kawal-siber.internal:9000" },
+        { "name": "S3_BUCKET_NAME", "value": "kawal-siber-evidence-prod-123456789012" }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:kawal-siber/prod/database-url"
+        },
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:kawal-siber/prod/jwt-secret"
+        },
+        {
+          "name": "TOOLS_AGENT_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:kawal-siber/prod/tools-agent-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/ecs/kawal-siber-prod/backend",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+        ],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      }
+    }
+  ]
+}
+

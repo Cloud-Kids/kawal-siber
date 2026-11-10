@@ -1,0 +1,48 @@
+{
+  "repositories": [
+    {
+      "repositoryName": "kawal-siber-frontend",
+      "imageTagMutability": "IMMUTABLE",
+      "imageScanningConfiguration": {
+        "scanOnPush": true
+      },
+      "encryptionConfiguration": {
+        "encryptionType": "KMS"
+      },
+      "lifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Retain last 30 tagged release images\",\"selection\":{\"tagStatus\":\"tagged\",\"tagPrefixList\":[\"sha-\",\"v\"],\"countType\":\"imageCountMoreThan\",\"countNumber\":30},\"action\":{\"type\":\"expire\"}},{\"rulePriority\":2,\"description\":\"Expire untagged images after 7 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":7},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    {
+      "repositoryName": "kawal-siber-backend",
+      "imageTagMutability": "IMMUTABLE",
+      "imageScanningConfiguration": {
+        "scanOnPush": true
+      },
+      "encryptionConfiguration": {
+        "encryptionType": "KMS"
+      },
+      "lifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Retain last 30 tagged release images\",\"selection\":{\"tagStatus\":\"tagged\",\"tagPrefixList\":[\"sha-\",\"v\"],\"countType\":\"imageCountMoreThan\",\"countNumber\":30},\"action\":{\"type\":\"expire\"}},{\"rulePriority\":2,\"description\":\"Expire untagged images after 7 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":7},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    {
+      "repositoryName": "kawal-siber-worker",
+      "imageTagMutability": "IMMUTABLE",
+      "imageScanningConfiguration": {
+        "scanOnPush": true
+      },
+      "encryptionConfiguration": {
+        "encryptionType": "KMS"
+      },
+      "lifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Retain last 30 tagged release images\",\"selection\":{\"tagStatus\":\"tagged\",\"tagPrefixList\":[\"sha-\",\"v\"],\"countType\":\"imageCountMoreThan\",\"countNumber\":30},\"action\":{\"type\":\"expire\"}},{\"rulePriority\":2,\"description\":\"Expire untagged images after 7 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":7},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    {
+      "repositoryName": "kawal-siber-tools-agent",
+      "imageTagMutability": "IMMUTABLE",
+      "imageScanningConfiguration": {
+        "scanOnPush": true
+      },
+      "encryptionConfiguration": {
+        "encryptionType": "KMS"
+      },
+      "lifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Retain last 30 tagged release images\",\"selection\":{\"tagStatus\":\"tagged\",\"tagPrefixList\":[\"sha-\",\"v\"],\"countType\":\"imageCountMoreThan\",\"countNumber\":30},\"action\":{\"type\":\"expire\"}},{\"rulePriority\":2,\"description\":\"Expire untagged images after 7 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":7},\"action\":{\"type\":\"expire\"}}]}"
+    }
+  ]
+}
