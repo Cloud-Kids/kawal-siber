@@ -88,21 +88,25 @@ def calculate_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
-def resolve_report_path(file_uuid: str, fmt: str) -> Path:
-    """Resolve a safe, UUID-based report file path within REPORTS_DIR.
+def resolve_report_path(
+    file_uuid: str, fmt: str, base_dir: Optional[Path] = None
+) -> Path:
+    """Resolve a safe, UUID-based report file path within the reports directory.
 
     Args:
         file_uuid: The UUID string used as the base filename.
         fmt: File extension (pdf, html, json, csv).
+        base_dir: Reports directory to resolve against. Defaults to REPORTS_DIR.
 
     Returns:
-        Resolved absolute Path guaranteed to be inside REPORTS_DIR.
+        Resolved absolute Path guaranteed to be inside the reports directory.
 
     Raises:
-        PermissionError: If resolved path escapes REPORTS_DIR (path traversal guard).
+        PermissionError: If resolved path escapes the reports directory (path traversal guard).
     """
-    candidate = (REPORTS_DIR / f"{file_uuid}.{fmt.lower()}").resolve()
-    base = REPORTS_DIR.resolve()
+    reports_dir = (base_dir or REPORTS_DIR).resolve()
+    candidate = (reports_dir / f"{file_uuid}.{fmt.lower()}").resolve()
+    base = reports_dir
     if not str(candidate).startswith(str(base)):
         raise PermissionError(
             f"Resolved report path {candidate} is outside reports directory {base}"
@@ -292,7 +296,9 @@ class ReportingEngine:
         # Idempotency: if already COMPLETED and file exists, skip regeneration
         if report.generation_status == "COMPLETED" and report.file_uuid:
             try:
-                existing = resolve_report_path(report.file_uuid, report.format)
+                existing = resolve_report_path(
+                    report.file_uuid, report.format, base_dir=self._reports_dir
+                )
                 if existing.exists():
                     logger.info(
                         "Report %s already COMPLETED with file_uuid=%s — skipping regeneration.",
@@ -312,7 +318,9 @@ class ReportingEngine:
         file_uuid_str = str(uuid.uuid4())
         fmt = report.format.upper()
         file_extension = fmt.lower()
-        output_path = resolve_report_path(file_uuid_str, file_extension)
+        output_path = resolve_report_path(
+            file_uuid_str, file_extension, base_dir=self._reports_dir
+        )
 
         tmp_path: Optional[Path] = None
 
