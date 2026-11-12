@@ -1,0 +1,43 @@
+# ==============================================================================
+# KAWAL SIBER — Single-EC2 terraform.tfvars EXAMPLE
+#
+# Copy to terraform.tfvars and fill in YOUR values.
+# NEVER commit terraform.tfvars. NEVER put secrets or AWS credentials here.
+# ==============================================================================
+
+# --- AWS ----------------------------------------------------------------------
+aws_region     = "us-east-1"          # must match the region of your VPC/subnet
+environment    = "lab"
+instance_name  = "kawal-siber"
+
+# --- Compute ------------------------------------------------------------------
+# r6i.large is the recommended default (2 vCPU / 16 GiB) but AWS Academy
+# Learner Labs whitelist specific types. If plan/apply fails with
+# "instance type is not available / not supported", switch to a permitted
+# type: r5.large, r5a.large, m6i.large, t3.xlarge, etc.
+instance_type = "r6i.large"
+
+# Name of an EXISTING EC2 key pair in the same region (created in Step 7 of
+# the README). The matching .pem private key is used for SSH.
+key_name = "kawal-siber-key"
+
+# --- Existing network (NO VPC/subnet is created) -------------------------------
+# AWS Academy default VPC + a public subnet. Find IDs in the console:
+#   VPC     → VPC dashboard → "vpc-xxxxxxxx"
+#   Subnet  → VPC → Subnets → pick a public one (auto-assign public IP: Yes)
+vpc_id    = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id = "subnet-yyyyyyyyyyyyyyyyy"
+
+# --- Access control ------------------------------------------------------------
+# Your current public IP with /32. Find it: https://checkip.amazonaws.com
+# NEVER use 0.0.0.0/0 for admin_cidr.
+admin_cidr = "203.0.113.10/32"
+
+# Web access: restrict to your admin CIDR for initial private testing.
+# Set to ["0.0.0.0/0"] ONLY after HTTPS + auth are verified.
+web_allowed_cidrs = ["203.0.113.10/32"]
+
+# --- Storage -------------------------------------------------------------------
+root_volume_size      = 100   # GiB, gp3
+root_volume_encrypted = true  # disable only if Learner Lab rejects encryption
+delete_on_termination = true  # WARNING: terraform destroy then DELETES the disk

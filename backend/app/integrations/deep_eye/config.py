@@ -7,8 +7,10 @@ import os
 from pathlib import Path
 from typing import Dict, Any
 
-# Root paths
-WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+# Root paths — centralized storage/workspace resolution (app.paths honors
+# KAWAL_WORKSPACE_ROOT / KAWAL_STORAGE_ROOT env overrides for containers).
+from app.paths import WORKSPACE_ROOT  # noqa: E402
+
 DEEP_EYE_ROOT = Path(
     os.getenv("DEEP_EYE_ROOT", str(WORKSPACE_ROOT / "tools" / "deep-eye"))
 ).resolve()

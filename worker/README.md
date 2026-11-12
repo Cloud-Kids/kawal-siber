@@ -38,16 +38,14 @@ pip install -r worker/requirements.txt
 - `queue.py` uses `PRAGMA busy_timeout=10000` to prevent locked database errors.
 - Atomic state transitions: `PENDING` -> `RUNNING` -> `COMPLETED` / `FAILED`.
 
-### Concurrent Dual Workers (Production PostgreSQL / AWS ECS):
-- Utilizes PostgreSQL's native row-level concurrency lock:
-  ```sql
-  SELECT * FROM scan_jobs
-  WHERE status = 'PENDING'
-  ORDER BY created_at ASC
-  LIMIT 1
-  FOR UPDATE SKIP LOCKED;
-  ```
-- Multiple workers (`worker-a` and `worker-b`) poll simultaneously without blocking, deadlocks, or duplicate task claims.
+### Concurrent Claiming (SQLite and PostgreSQL):
+- SQLite has no ``SELECT ... FOR UPDATE SKIP LOCKED``. Claims use a single
+  atomic conditional ``UPDATE ... WHERE status='PENDING' RETURNING`` so two
+  consumers can never claim the same job (verified by
+  ``worker/tests/test_queue_concurrency.py``).
+- PostgreSQL keeps the ``SELECT ... FOR UPDATE`` row-lock path.
+- Safe for multiple workers; for the single-instance deployment keep
+  worker concurrency at 1 until load testing justifies more.
 
 ---
 

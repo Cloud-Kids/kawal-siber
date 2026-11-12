@@ -1,0 +1,17 @@
+# Terraform working dirs & state — NEVER commit
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Variable files may contain sensitive values — never commit
+terraform.tfvars
+terraform.tfvars.json
+*.auto.tfvars
+!terraform.tfvars.example
+
+# Private keys must never enter the repo
+*.pem
+*.ppk
+*.key

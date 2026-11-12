@@ -18,9 +18,6 @@ jobs:
   backend-and-worker-tests:
     name: Backend, Worker & Acceptance Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: kawal-siber
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,8 +28,8 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: |
-            kawal-siber/backend/requirements.txt
-            kawal-siber/worker/requirements.txt
+            backend/requirements.txt
+            worker/requirements.txt
 
       - name: Install system dependencies (Nmap for worker scope/scanner testing)
         run: |
@@ -46,11 +43,11 @@ jobs:
           pip install -r worker/requirements.txt
           pip install pytest pytest-asyncio anyio httpx
 
-      - name: Run Backend Pytest Suite (129 tests)
+      - name: Run Backend Pytest Suite
         run: |
           python -m pytest backend/tests -v --strict-markers
 
-      - name: Run Worker Pytest Suite (22 tests)
+      - name: Run Worker Pytest Suite
         run: |
           python -m pytest worker/tests -v --strict-markers
 
@@ -71,9 +68,6 @@ jobs:
   frontend-checks:
     name: Frontend Type-Check & Build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: kawal-siber/frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,15 +77,18 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: kawal-siber/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Run TypeScript type-check
+        working-directory: frontend
         run: npm run type-check
 
       - name: Build Next.js 15 Standalone application
+        working-directory: frontend
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: '1'
@@ -129,21 +126,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Worker image COPYs tools/deep-eye — submodule content required
+          submodules: recursive
 
       - name: Validate Backend Dockerfile
         run: |
-          docker build --dry-run -t kawal-siber-backend:dryrun -f kawal-siber/backend/Dockerfile kawal-siber/backend || \
-          docker build -t kawal-siber-backend:dryrun -f kawal-siber/backend/Dockerfile kawal-siber/backend
+          docker build --dry-run -t kawal-siber-backend:dryrun -f backend/Dockerfile backend || \
+          docker build -t kawal-siber-backend:dryrun -f backend/Dockerfile backend
 
       - name: Validate Frontend Dockerfile
         run: |
-          docker build -t kawal-siber-frontend:dryrun -f kawal-siber/frontend/Dockerfile kawal-siber/frontend
+          docker build -t kawal-siber-frontend:dryrun -f frontend/Dockerfile frontend
 
       - name: Validate Worker Dockerfile
         run: |
-          docker build -t kawal-siber-worker:dryrun -f kawal-siber/worker/Dockerfile kawal-siber
+          docker build -t kawal-siber-worker:dryrun -f worker/Dockerfile .
 
-      - name: Validate Tools Agent Dockerfile
+      - name: Validate Single-Instance Compose Manifest
         run: |
-          docker build -t kawal-siber-tools-agent:dryrun -f kawal-siber/deploy/aws/ks-tools-01/Dockerfile kawal-siber/deploy/aws/ks-tools-01
-
+          docker compose -f deploy/single-instance/compose.single-instance.yaml config -q

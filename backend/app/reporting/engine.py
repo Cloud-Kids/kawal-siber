@@ -40,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import GeneratedReport
+from app.paths import REPORTS_DIR as _PATHS_REPORTS_DIR, SURICATA_RULES_DIR, WORKSPACE_ROOT
 from app.reporting.ai_intelligence_report import generate_ai_intelligence_report_data
 from app.reporting.assessment_report import generate_assessment_report_data
 from app.reporting.audit import append_audit_event
@@ -56,8 +57,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Storage configuration
 # ---------------------------------------------------------------------------
-_DEFAULT_REPORTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "storage" / "reports"
-REPORTS_DIR = Path(os.environ.get("REPORTS_STORAGE_PATH", str(_DEFAULT_REPORTS_DIR)))
+REPORTS_DIR = _PATHS_REPORTS_DIR
 
 # Maximum report file size: 50 MB
 MAX_REPORT_SIZE_BYTES: int = int(os.environ.get("MAX_REPORT_SIZE_BYTES", str(50 * 1024 * 1024)))
@@ -151,7 +151,7 @@ def get_reproducibility_component_versions() -> Dict[str, str]:
 
     # 3. Suricata ruleset version
     try:
-        rules_dir = Path(__file__).resolve().parent.parent.parent.parent / "storage" / "suricata" / "rules"
+        rules_dir = SURICATA_RULES_DIR
         if rules_dir.exists() and any(rules_dir.glob("*.rules")):
             versions["suricata_ruleset"] = "local-ruleset-2026.1"
         else:
@@ -171,7 +171,7 @@ def get_reproducibility_component_versions() -> Dict[str, str]:
 
     # 5. Git Commit Hash
     try:
-        repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        repo_root = WORKSPACE_ROOT
         res = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=str(repo_root),

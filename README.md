@@ -83,7 +83,7 @@ INTERNET / OPERATOR ──►│  [Host Firewall / AWS Security Group: 22, 80, 4
 ```
 
 > [!NOTE]
-> Multi-host distributed EC2 redundancy and AWS ECS Multi-AZ architectures are preserved in [`deploy/aws-ec2/`](deploy/aws-ec2/) and [`docs/deployment/aws-ec2/`](docs/deployment/aws-ec2/) as **Future Enterprise Architecture / Extensions**.
+> The former multi-host EC2 and AWS ECS/ECR/ALB/RDS deployment configurations were removed during the legacy infrastructure cleanup. A future High-Availability architecture may be designed separately as a roadmap item — it is not part of the active deployment.
 
 ---
 
@@ -94,10 +94,10 @@ INTERNET / OPERATOR ──►│  [Host Firewall / AWS Security Group: 22, 80, 4
 | **Frontend** | UI & Dashboard | Next.js 15.3.3, React 19.1.0, TypeScript 5.6.3, Tailwind CSS, Lucide Icons |
 | **Backend API** | REST API & Reporting | Python 3.12.10, FastAPI 0.115.5, SQLAlchemy 2.0.36, Pydantic 2.10, ReportLab 4.2 |
 | **Database** | Persistence & ORM | PostgreSQL 16 (Production) / SQLite WAL Mode (Local Development), Alembic 1.14 |
-| **Worker** | Background Processing | Python 3.12 Daemon, Asyncio, PostgreSQL SKIP LOCKED, Safe Subprocess Runner |
+| **Worker** | Background Processing | Python 3.12 Daemon, Asyncio, Atomic job claiming (SQLite UPDATE..RETURNING / PG row locks), Safe Subprocess Runner |
 | **Security Tools** | Network & App Auditing| Nmap 7.95, Suricata 7.0.7, Deep Eye 1.4.0 (Hanzou) with non-destructive patch |
-| **Orchestration** | Containers & Cloud | AWS ECS on EC2 (Multi-AZ), Amazon ECR, AWS Application Load Balancer, Docker |
-| **CI / CD** | Automated Pipelines | GitHub Actions, AWS OIDC (No Static Keys), Trivy, Gitleaks, Pip-Audit |
+| **Orchestration** | Containers & Cloud | Docker Engine & Docker Compose, Nginx Reverse Proxy, Terraform (single EC2) |
+| **CI / CD** | Automated Pipelines | GitHub Actions (AWS-independent CI), Trivy, Gitleaks, Pip-Audit |
 
 ---
 
@@ -105,37 +105,30 @@ INTERNET / OPERATOR ──►│  [Host Firewall / AWS Security Group: 22, 80, 4
 
 ```
 .
-├── .github/workflows/          # GitHub Actions CI/CD workflows
-│   ├── ci.yml                  # Pull request & push quality gate (176 tests)
-│   ├── deploy-production.yml   # OIDC ECR push, DB migration task & ECS rolling update
-│   ├── rollback-production.yml # Operator-controlled manual rollback workflow
+├── .github/workflows/          # GitHub Actions CI workflows (AWS-independent)
+│   ├── ci.yml                  # Pull request & push quality gate (tests, builds, compose validation)
 │   └── security-scan.yml       # Scheduled Trivy, Gitleaks, pip-audit & npm audit
 ├── backend/                    # FastAPI REST API, Alembic migrations & reporting
 │   └── README.md               # ➔ Backend Component Documentation
 ├── frontend/                   # Next.js 15 App Router web application
 │   └── README.md               # ➔ Frontend Component Documentation
-├── worker/                     # Async background consumer daemon (SKIP LOCKED)
+├── worker/                     # Async background consumer daemon (atomic job claims)
 │   └── README.md               # ➔ Worker Daemon Documentation
 ├── tools/                      # Security tool execution layer & integration engines
 │   ├── deep-eye/               # Deep Eye web scanner (Pinned commit e4397d1 with local patch)
 │   ├── scanner-website/        # Web inspection toolkit (Pinned commit 4a8c9c2)
 │   └── README.md               # ➔ Security Tools & Scope Guard Documentation
-├── deploy/                     # Infrastructure deployment specifications
-│   ├── aws/                    # Per-host Docker Compose configurations & scripts
-│   ├── aws-ec2/                # AWS EC2 container redundancy & failover runbook
-│   │   └── README.md           # ➔ AWS EC2 Redundancy Runbook
-│   └── README.md               # ➔ General Deployment Guide
+├── deploy/                     # Deployment specifications
+│   ├── single-instance/        # CANONICAL: single-host Linux runbook (Nginx + Compose)
+│   ├── proxmox/                # Proxmox VE deployment placeholder
+│   └── README.md               # ➔ Deployment Guide & Compose role comparison
 ├── docs/                       # Architecture specifications & Phase reports
-│   ├── deployment/aws-ec2/     # AWS ECS & CI/CD deployment documentation guides (15-21)
+│   ├── deployment/             # Deployment guide index & CD security notes
 │   ├── reports/                # Phase 1 through 6 hardening & audit records
 │   └── README.md               # ➔ Documentation Index & Test Metrics
-├── infra/aws/                  # AWS Infrastructure as Code (IaC) configuration templates
-│   ├── alb/                    # Multi-AZ ALB & target group routing rules
-│   ├── cloudwatch/             # Production alarms & deployment metrics
-│   ├── ecr/                    # Immutable ECR repository specifications
-│   ├── ecs/                    # ECS Task Definitions & Multi-AZ Service specs
-│   ├── iam/                    # OIDC trust policies & least-privilege IAM roles
-│   └── rds/                    # Amazon RDS PostgreSQL Multi-AZ specifications
+├── iac/                        # ACTIVE Infrastructure as Code (Terraform)
+│   ├── tf-aws/                 # Single-EC2 deployment: 1 instance + 1 Security Group
+│   └── tf-proxmox/             # Proxmox VE scaffold (future)
 ├── scripts/                    # Automation, test runners & verification utilities
 │   ├── run-all-tests.ps1       # Master test automation runner (176 tests)
 │   ├── start-local-dev.ps1     # Local development startup guide
@@ -238,6 +231,7 @@ The immediate, fully self-contained deployment target for KAWAL SIBER is **ONE S
 - **Canonical Runbook**: [`deploy/single-instance/README.md`](deploy/single-instance/README.md)
 - **Docker Compose Manifest**: [`deploy/single-instance/compose.single-instance.yaml`](deploy/single-instance/compose.single-instance.yaml)
 - **Nginx Ingress Configuration**: [`deploy/single-instance/nginx.conf`](deploy/single-instance/nginx.conf)
+- **AWS EC2 Terraform (ONE instance + ONE Security Group)**: [`iac/tf-aws/`](iac/tf-aws/) — provisions only the EC2 host and its network access; no VPC/ECS/ECR/RDS/ALB/IAM is created. Full Learner Lab guide: [`iac/tf-aws/README.md`](iac/tf-aws/README.md)
 
 #### Standalone Stack Components:
 1. **Reverse Proxy (Nginx 1.27)**: The only service with host port bindings (80/443). Enforces TLS termination, security headers (CSP, HSTS, X-Frame-Options), gzip compression, proxies `/api/v1/` to backend:8000, and routes UI traffic to frontend:3000.
@@ -263,10 +257,8 @@ The single-instance target strictly excludes AWS managed application services:
 - **SQLite Concurrency Bound**: Well-suited for hackathon workloads, but high concurrent write volume (>100 RPS) requires upgrading to PostgreSQL.
 - **Local Tool Sandboxing**: Nmap and Suricata execute inside containers sharing host CPU/memory resources.
 
-### 8.4 Future Enterprise Roadmap (Levels 2 & 3)
-For high-concurrency, multi-region, or military operational deployments, KAWAL SIBER maintains two advanced architectures:
-- **Level 2: Distributed EC2 Container Redundancy**: 6 dedicated EC2 instances running 2 containers each (12 containers total) with PostgreSQL streaming replication. Runbook: [`deploy/aws-ec2/README.md`](deploy/aws-ec2/README.md).
-- **Level 3: AWS ECS Multi-AZ Enterprise**: Automated GitHub Actions CI/CD deploying onto multi-AZ ECS on EC2 fronted by AWS ALB and Amazon RDS PostgreSQL Multi-AZ. Reference: [`docs/deployment/aws-ec2/15-CICD-ARCHITECTURE.md`](docs/deployment/aws-ec2/15-CICD-ARCHITECTURE.md) and [`infra/aws/`](infra/aws/).
+### 8.4 Future Enterprise Roadmap
+For high-concurrency, multi-region, or military operational deployments, KAWAL SIBER may adopt a High-Availability architecture (multi-host container redundancy, PostgreSQL replication, or managed services). This is a **future roadmap item only** — no multi-instance or managed-service deployment configuration is part of the active repository.
 
 ---
 
@@ -286,9 +278,9 @@ For high-concurrency, multi-region, or military operational deployments, KAWAL S
 > [!CAUTION]
 > **OFFICIAL READINESS STATUS: `NOT PRODUCTION-READY FOR THE PUBLIC INTERNET`**
 > KAWAL SIBER has achieved a **100% automated test pass rate** in local and staging environments. However, before public internet exposure or military operational cutover, the following mandatory controls must be completed:
-> - Full Amazon RDS Multi-AZ provisioning and production data cutover.
-> - Private PKI mutual TLS (mTLS) certificate deployment between Backend and Tools Agent microservices.
-> - AWS Web Application Firewall (AWS WAF) rule deployment protecting public ALB endpoints.
+> - Production-grade database hardening (e.g. migration from SQLite to PostgreSQL for high write concurrency).
+> - Private PKI mutual TLS (mTLS) certificate deployment between Backend and security tool execution components.
+> - Web Application Firewall (WAF) rule deployment protecting public ingress endpoints.
 > - Formal third-party penetration testing and source code security review.
 
 ---
@@ -296,12 +288,13 @@ For high-concurrency, multi-region, or military operational deployments, KAWAL S
 ## 11. Component Documentation Links
 
 - **[Single-Instance Production Deployment Runbook](deploy/single-instance/README.md)** ➔ *Active Primary Deployment Guide (EC2/Proxmox)*
+- **[Infrastructure as Code — tf-aws (Single EC2)](iac/tf-aws/README.md)** ➔ *Terraform: 1 EC2 + 1 Security Group*
 - **[Frontend Web Application (Next.js 15)](frontend/README.md)**
 - **[Backend API & Reporting Engine (FastAPI)](backend/README.md)**
 - **[Security Worker Daemon (Async Queue)](worker/README.md)**
 - **[Security Tools & Scope Guards (Nmap, Suricata, Deep Eye)](tools/README.md)**
 - **[General Deployment Architecture](deploy/README.md)**
-- **[AWS EC2 Distributed Redundancy Runbook](deploy/aws-ec2/README.md)**
+- **[Deployment Guide Index & CD Security Notes](docs/deployment/README.md)**
 - **[Technical Documentation & Engineering Archive](docs/README.md)**
 - **[Operational & Verification Scripts](scripts/README.md)**
 

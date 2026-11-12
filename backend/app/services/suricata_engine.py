@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from app.paths import (
+    PCAP_DIR as _ALLOWED_PCAP_DIR,
+    SURICATA_DIR as _SURICATA_CONF_DIR,
+    SURICATA_LOGS_DIR as _SURICATA_LOGS_DIR,
+)
+
 logger = logging.getLogger(__name__)
 
 # Standard allowed extensions for network packet captures
@@ -24,11 +30,6 @@ MAX_PCAP_FILE_SIZE = 50 * 1024 * 1024
 
 # Default paths
 _DEFAULT_WIN_SURICATA = Path(r"C:\Program Files\Suricata\suricata.exe")
-_WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_STORAGE_ROOT = _WORKSPACE_ROOT / "storage"
-_ALLOWED_PCAP_DIR = _STORAGE_ROOT / "pcaps"
-_SURICATA_CONF_DIR = _STORAGE_ROOT / "suricata"
-_SURICATA_LOGS_DIR = _SURICATA_CONF_DIR / "logs"
 
 
 class SuricataEngineError(Exception):

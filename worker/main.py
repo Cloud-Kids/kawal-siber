@@ -170,8 +170,6 @@ def process_triage_job(run_id: int, db_factory) -> None:
             AITriageRun, Incident, Asset, SecurityEvent, WebFinding, ScanResult,
             IncidentEvidence, IncidentTimelineEvent,
         )
-        from app.services.unified_correlator import UnifiedCorrelationEngine
-        from app.services.triage_engine import TriageEngine, IncidentEvidenceAggregator
 
         run = db.get(AITriageRun, run_id)
         if not run:
@@ -186,6 +184,9 @@ def process_triage_job(run_id: int, db_factory) -> None:
             return
 
         try:
+            from app.services.unified_correlator import UnifiedCorrelationEngine
+            from app.services.triage_engine import TriageEngine, IncidentEvidenceAggregator
+
             # 1. Run or refresh correlation to ensure all evidence is linked
             correlator = UnifiedCorrelationEngine(db)
             correlator.correlate_incident(incident.id)
@@ -291,7 +292,6 @@ def process_report_job(report_db_id: int, db_factory) -> None:
     """
     with db_factory() as db:
         from app.models import GeneratedReport
-        from app.reporting.engine import ReportingEngine
 
         report = db.get(GeneratedReport, report_db_id)
         if not report:
@@ -299,6 +299,7 @@ def process_report_job(report_db_id: int, db_factory) -> None:
             return
 
         try:
+            from app.reporting.engine import ReportingEngine
             engine = ReportingEngine(db)
             engine.process_report_job(report.report_id)
             logger.info("Successfully completed report generation for %s (id=%d)", report.report_id, report.id)
@@ -342,6 +343,23 @@ async def run_worker() -> None:
             "CRITICAL: SCAN_ENABLED is set to FALSE. Worker will not process any scan jobs "
             "until explicitly enabled in environment (SCAN_ENABLED=true)."
         )
+
+    # Validate optional runtime dependencies used by lazy job processors.
+    # Missing packages degrade specific job types to FAILED (not crash loops),
+    # but operators should see the gap at startup.
+    for module_name, job_type in (
+        ("reportlab", "PDF report generation"),
+        ("pypdf", "PDF report parsing"),
+        ("httpx", "web assessments / AI provider HTTP"),
+        ("yaml", "Deep Eye safe-config generation"),
+    ):
+        try:
+            __import__(module_name)
+        except ImportError:
+            logger.error(
+                "Missing optional dependency '%s' — %s jobs will fail until installed.",
+                module_name, job_type,
+            )
 
     db_factory = get_worker_sessionmaker()
 
@@ -414,6 +432,18 @@ async def run_worker() -> None:
                     svc.execute_assessment_job(claimed_assessment_id)
             except Exception as exc:
                 logger.exception("Failed to execute claimed web assessment %d: %s", claimed_assessment_id, exc)
+                try:
+                    with db_factory() as db:
+                        from app.models import WebAssessment
+                        from datetime import datetime, timezone
+                        a = db.get(WebAssessment, claimed_assessment_id)
+                        if a and a.status == "RUNNING":
+                            a.status = "FAILED"
+                            a.error_message = f"Worker execution error: {type(exc).__name__}"
+                            a.completed_at = datetime.now(timezone.utc)
+                            db.commit()
+                except Exception:
+                    pass
         elif claimed_triage_id is not None:
             try:
                 process_triage_job(claimed_triage_id, db_factory)

@@ -47,10 +47,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/monitoring", tags=["Monitoring & Threat Detection"])
 
-_WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
-_STORAGE_ROOT = _WORKSPACE_ROOT / "storage"
-_PCAP_DIR = _STORAGE_ROOT / "pcaps"
-_LOGS_DIR = _STORAGE_ROOT / "suricata" / "logs"
+from app.paths import PCAP_DIR as _PCAP_DIR, SURICATA_LOGS_DIR as _LOGS_DIR
 
 
 def _process_pcap_job(analysis_id: int, pcap_path: Path, db_session_factory) -> None:

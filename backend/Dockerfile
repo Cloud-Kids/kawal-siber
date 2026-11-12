@@ -22,8 +22,16 @@ RUN pip install --upgrade pip \
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
+# Suricata is required for offline PCAP analysis (monitoring routes run it
+# as a background task inside this container). Pinned via distro package.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        suricata \
+    && rm -rf /var/lib/apt/lists/* \
+    && suricata --build-info | head -5
+
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    KAWAL_STORAGE_ROOT=/data
 
 # Create a non-root user
 RUN groupadd --gid 1001 appuser \
@@ -50,7 +58,7 @@ EXPOSE 8000
 # Healthcheck — curl must be available on the slim image; install it via builder
 # stage or use wget as fallback
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')" \
     || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

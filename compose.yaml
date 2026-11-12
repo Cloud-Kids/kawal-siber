@@ -11,15 +11,16 @@ services:
       - DATABASE_URL=sqlite:////data/kawal_siber.db
       - FRONTEND_URL=http://localhost:3000
       - PYTHONUNBUFFERED=1
+      - KAWAL_STORAGE_ROOT=/data
     volumes:
       - kawal_siber_db:/data
-      - kawal_siber_reports:/app/storage/reports
+      - kawal_siber_reports:/data/reports
     ports:
       - "127.0.0.1:8000:8000"
     networks:
       - kawal_net
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -37,8 +38,11 @@ services:
       - NMAP_TIMEOUT_SECONDS=60
       - POLL_INTERVAL_SECONDS=3.0
       - PYTHONUNBUFFERED=1
+      - KAWAL_STORAGE_ROOT=/data
+      - DEEP_EYE_ROOT=/app/tools/deep-eye
     volumes:
       - kawal_siber_db:/data
+      - kawal_siber_reports:/data/reports
     networks:
       - kawal_net
     depends_on:
@@ -50,7 +54,7 @@ services:
           cpus: "1.0"
           memory: 512M
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD", "python", "-c", "import worker.queue, worker.config; print('worker modules importable')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -74,7 +78,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
