@@ -1,0 +1,12 @@
+# Gitleaks false-positive allowlist — reviewed 2026-11-12
+# All entries are synthetic test fixtures (fake api_key/password values used
+# to verify secret redaction) or documentation placeholders. No real secrets.
+9e9ed6272f5ae7ba11e95779554e4db8b8d9e1d4:iac/tf-aws/README.md:generic-api-key:71
+e9d3ae0e4399d1b1541878098f0e2edecc731ede:backend/tests/test_deep_eye_phase4.py:generic-api-key:82
+e9d3ae0e4399d1b1541878098f0e2edecc731ede:backend/tests/test_deep_eye_phase4.py:generic-api-key:83
+e9d3ae0e4399d1b1541878098f0e2edecc731ede:backend/tests/test_phase6_reporting.py:generic-api-key:63
+e9d3ae0e4399d1b1541878098f0e2edecc731ede:phase4_acceptance_test.py:generic-api-key:195
+0508039a2b2e9b6f0adaa1c2a331c532f54ca69b:kawal-siber/backend/tests/test_deep_eye_phase4.py:generic-api-key:82
+0508039a2b2e9b6f0adaa1c2a331c532f54ca69b:kawal-siber/backend/tests/test_deep_eye_phase4.py:generic-api-key:83
+0508039a2b2e9b6f0adaa1c2a331c532f54ca69b:kawal-siber/backend/tests/test_phase6_reporting.py:generic-api-key:63
+0508039a2b2e9b6f0adaa1c2a331c532f54ca69b:kawal-siber/phase4_acceptance_test.py:generic-api-key:195
