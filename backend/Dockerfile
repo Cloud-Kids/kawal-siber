@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 
 RUN pip install --upgrade pip \
  && pip install --no-cache-dir --prefix=/install -r requirements.txt
@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    KAWAL_STORAGE_ROOT=/data
+    KAWAL_STORAGE_ROOT=/data \
+    DEEP_EYE_ROOT=/app/tools/deep-eye
 
 # Create a non-root user
 RUN groupadd --gid 1001 appuser \
@@ -43,9 +44,12 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 
 # Copy application source
-COPY app/ ./app/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+COPY backend/app/ ./app/
+COPY backend/alembic/ ./alembic/
+COPY backend/alembic.ini .
+# Deep Eye CLI sources for SAFE_LOCAL subprocess assessments
+# (build context is the repo root, same as worker/).
+COPY tools/deep-eye ./tools/deep-eye
 
 # Create /data directory for SQLite persistence and set ownership
 RUN mkdir -p /data && chown appuser:appuser /data

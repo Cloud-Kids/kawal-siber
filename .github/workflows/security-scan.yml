@@ -45,10 +45,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Backend image COPYs tools/deep-eye — submodule content required
+          submodules: recursive
 
       - name: Build Backend Image for Scanning
         run: |
-          docker build -t kawal-siber-backend:scan -f backend/Dockerfile backend
+          docker build -t kawal-siber-backend:scan -f backend/Dockerfile .
 
       - name: Run Trivy Vulnerability Scanner on Backend Image
         uses: aquasecurity/trivy-action@master

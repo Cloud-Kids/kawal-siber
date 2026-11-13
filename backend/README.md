@@ -154,7 +154,7 @@ Built using a multi-stage `python:3.12-slim` image running as unprivileged user 
 
 ```bash
 # Build backend image
-docker build -t kawal-siber-backend:latest -f backend/Dockerfile backend
+docker build -t kawal-siber-backend:latest -f backend/Dockerfile .
 
 # Run container
 docker run -d \
