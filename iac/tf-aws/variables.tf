@@ -106,3 +106,17 @@ variable "repo_branch" {
   type        = string
   default     = "main"
 }
+
+variable "git_access_token" {
+  description = <<-EOT
+    GitHub token for cloning the PRIVATE repo during cloud-init.
+    Use a fine-grained PAT scoped to ONLY this repository with
+    Contents: Read-only permission (orgs may disable Deploy Keys).
+    Stored in Terraform state and EC2 user-data — treat as a secret:
+    pass via -var, TF_VAR_git_access_token env, or a gitignored
+    terraform.tfvars. Leave empty to skip git auth (public repos only).
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
