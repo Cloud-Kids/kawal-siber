@@ -88,3 +88,21 @@ variable "delete_on_termination" {
   type        = bool
   default     = true
 }
+
+variable "app_deploy_enabled" {
+  description = "Clone the repo and start the Docker Compose stack automatically via cloud-init"
+  type        = bool
+  default     = true
+}
+
+variable "repo_url" {
+  description = "Git URL used on the EC2 host. Use the SSH form for private repos."
+  type        = string
+  default     = "git@github.com:Cloud-Kids/kawal-siber.git"
+}
+
+variable "repo_branch" {
+  description = "Git branch checked out on the EC2 host"
+  type        = string
+  default     = "main"
+}
