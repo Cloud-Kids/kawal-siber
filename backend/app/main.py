@@ -32,36 +32,43 @@ _MAX_REQUEST_BODY_BYTES: int = 50 * 1024 * 1024  # 50 MB (accommodates PCAP uplo
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Create all tables at startup (idempotent, safe for dev/test)."""
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables ensured.")
+    from app.judge_mode import JUDGE_MODE
+    if JUDGE_MODE:
+        # Public judge env: judge.db is a read-only snapshot — skip all
+        # startup writes (create_all, stale-job reaper).
+        logger.info("Judge mode: skipping startup DB writes (read-only dataset).")
+    else:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables ensured.")
 
     # Reap orphaned background jobs: PCAP analyses stuck in RUNNING/PENDING
     # because the process restarted mid-task would otherwise show "MEMPROSES"
     # forever. Anything older than 15 minutes without completion is failed.
-    try:
-        from datetime import datetime, timedelta, timezone
-        from sqlalchemy import update
-        from app.models import PcapAnalysis
+    if not JUDGE_MODE:
+        try:
+            from datetime import datetime, timedelta, timezone
+            from sqlalchemy import update
+            from app.models import PcapAnalysis
 
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
-        with SessionLocal() as db:
-            result = db.execute(
-                update(PcapAnalysis)
-                .where(
-                    PcapAnalysis.status.in_(["RUNNING", "PENDING"]),
-                    PcapAnalysis.created_at < cutoff,
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+            with SessionLocal() as db:
+                result = db.execute(
+                    update(PcapAnalysis)
+                    .where(
+                        PcapAnalysis.status.in_(["RUNNING", "PENDING"]),
+                        PcapAnalysis.created_at < cutoff,
+                    )
+                    .values(
+                        status="FAILED",
+                        completed_at=datetime.now(timezone.utc),
+                        error_message="Analysis interrupted by service restart — please resubmit the PCAP file.",
+                    )
                 )
-                .values(
-                    status="FAILED",
-                    completed_at=datetime.now(timezone.utc),
-                    error_message="Analysis interrupted by service restart — please resubmit the PCAP file.",
-                )
-            )
-            db.commit()
-            if result.rowcount:
-                logger.warning("Reaped %d orphaned PCAP analyses.", result.rowcount)
-    except Exception:
-        logger.exception("Failed to reap orphaned PCAP analyses.")
+                db.commit()
+                if result.rowcount:
+                    logger.warning("Reaped %d orphaned PCAP analyses.", result.rowcount)
+        except Exception:
+            logger.exception("Failed to reap orphaned PCAP analyses.")
 
     yield
     logger.info("Application shutdown.")
@@ -80,8 +87,9 @@ app = FastAPI(
     lifespan=lifespan,
     # Disable default /docs and /redoc in production if needed via env;
     # keep enabled for development convenience.
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "true" else "/docs",
+    redoc_url=None if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "true" else "/redoc",
+    openapi_url=None if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "true" else "/openapi.json",
 )
 
 
@@ -100,6 +108,69 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Middleware: request body size limit (1 MB)
 # ---------------------------------------------------------------------------
+@app.middleware("http")
+async def judge_mode_guard(request: Request, call_next):  # type: ignore[type-arg]
+    """Public judge demo mode: deny-by-default read-only enforcement."""
+    from app.judge_mode import JUDGE_MODE, judge_guard
+    if JUDGE_MODE:
+        blocked = judge_guard(request)
+        if blocked is not None:
+            return blocked
+    return await call_next(request)
+
+
+# Naive ISO-8601 datetime — FULL string match only. SQLite CURRENT_TIMESTAMP
+# stores UTC without zone info; make it explicit so browsers don't parse it
+# as local time. Parsed-JSON transform (not raw regex) so free-text strings
+# like "failed at 2026-11-13T09:22:00" are never modified.
+import json as _json
+import re as _re
+
+_NAIVE_DT_FULL = _re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$"
+)
+
+
+def _fix_naive_datetimes(node):
+    if isinstance(node, str) and _NAIVE_DT_FULL.match(node):
+        return node.replace(" ", "T") + "Z"
+    if isinstance(node, dict):
+        return {k: _fix_naive_datetimes(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_fix_naive_datetimes(v) for v in node]
+    return node
+
+
+@app.middleware("http")
+async def utc_timestamp_guard(request: Request, call_next):  # type: ignore[type-arg]
+    """Normalize naive UTC datetimes in JSON responses to explicit 'Z' ISO form."""
+    response = await call_next(request)
+    ctype = response.headers.get("content-type", "")
+    if "application/json" not in ctype:
+        return response
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+    try:
+        payload = _json.loads(body)
+    except Exception:
+        # Not parseable JSON — pass through untouched.
+        from starlette.responses import Response as _RawResponse
+        return _RawResponse(
+            content=body, status_code=response.status_code,
+            headers=dict(response.headers), media_type="application/json",
+        )
+    fixed = _json.dumps(_fix_naive_datetimes(payload), ensure_ascii=False)
+    from starlette.responses import Response as _RawResponse
+    return _RawResponse(
+        content=fixed.encode("utf-8"),
+        status_code=response.status_code,
+        headers={k: v for k, v in response.headers.items()
+                 if k.lower() not in ("content-length", "content-type")},
+        media_type="application/json",
+    )
+
+
 @app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):  # type: ignore[type-arg]
     """Reject requests whose Content-Length exceeds 1 MB."""

@@ -1,0 +1,87 @@
+# Judge demo stack — ISOLATED read-only environment.
+# Run alongside (never inside) the production compose project:
+#   docker compose -f deploy/judge-demo/compose.judge.yaml -p kawal-judge up -d --build
+#
+# Isolation guarantees:
+#  - separate containers, separate network namespace from prod? NO — shares
+#    the prod docker network ONLY for image reuse; judge services have NO
+#    route to prod backend/worker (different service names, no dependency).
+#  - judge.db is a SEPARATE SQLite file, bind-mounted READ-ONLY.
+#  - judge-backend runs as uid 1001, no docker socket, no privileged mode.
+#  - only judge-proxy publishes a port: 127.0.0.1:8081 (cloudflared only).
+
+name: kawal-judge
+
+services:
+  judge-proxy:
+    image: nginx:1.27-alpine
+    container_name: kawal-judge-proxy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8081"   # localhost only — cloudflared reaches it here
+    volumes:
+      - ./judge-nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      judge-backend:
+        condition: service_healthy
+      judge-frontend:
+        condition: service_healthy
+    networks: [judge_net]
+    deploy:
+      resources:
+        limits: { memory: 128M, cpus: "0.25" }
+
+  judge-backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: kawal-judge-backend
+    restart: unless-stopped
+    environment:
+      KAWAL_JUDGE_MODE: "true"
+      DATABASE_URL: "sqlite:////data/judge.db"
+      KAWAL_STORAGE_ROOT: "/data"   # REPORTS_DIR=/data/reports inside ro mount
+      FRONTEND_URL: "https://demo-kawal-siber.smkcloud.web.id"
+      # No secrets: judge backend gets nothing sensitive.
+    volumes:
+      - ../../storage/judge:/data:ro          # READ-ONLY judge dataset
+      - judge_tmp:/tmp
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [judge_net]
+    deploy:
+      resources:
+        limits: { memory: 512M, cpus: "0.5" }
+
+  judge-frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_JUDGE_MODE: "true"
+    container_name: kawal-judge-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_JUDGE_MODE: "true"
+      API_INTERNAL_URL: "http://judge-backend:8001"
+      NODE_ENV: production
+    networks: [judge_net]
+    deploy:
+      resources:
+        limits: { memory: 512M, cpus: "0.5" }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  judge_net:
+    driver: bridge
+    internal: false   # needs outbound? NO external calls needed, but keep simple bridge
+
+volumes:
+  judge_tmp:

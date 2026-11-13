@@ -1,9 +1,28 @@
 import type { AssetStatus, AttackType, AvailabilityStatus, ScanJobStatus, Severity } from '@/types';
 
-/** Format a date string to a locale-aware human-readable string (Indonesian locale). */
+/**
+ * Parse an API timestamp into a Date.
+ * Backend stores UTC; naive ISO strings (no Z / offset) are treated as UTC
+ * explicitly so the browser never interprets them as local time.
+ */
+export function parseApiTimestamp(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  // Has explicit zone? (Z or ±hh:mm at end) → parse as-is.
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso.trim())) {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Naive ISO datetime → treat as UTC.
+  const d = new Date(iso.trim().replace(' ', 'T') + 'Z');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Format a date string to a locale-aware human-readable string (Indonesian locale, WIB). */
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
   try {
+    const d = parseApiTimestamp(iso);
+    if (!d) return '—';
     return new Intl.DateTimeFormat('id-ID', {
       day: '2-digit',
       month: 'short',
@@ -13,7 +32,7 @@ export function formatDateTime(iso: string | null): string {
       second: '2-digit',
       hour12: false,
       timeZone: 'Asia/Jakarta',
-    }).format(new Date(iso));
+    }).format(d);
   } catch {
     return iso;
   }

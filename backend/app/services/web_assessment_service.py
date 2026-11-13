@@ -170,11 +170,19 @@ class WebAssessmentService:
         self.db.commit()
 
         try:
+            # Re-derive authorization context at execution time: only the
+            # asset actually linked to this target may extend scope —
+            # mirrors create_web_target() authorization, nothing broader.
+            extra_hosts: set = set()
+            if target.asset_id and target.asset and target.asset.target_ip:
+                extra_hosts.add(target.asset.target_ip)
+
             exec_result = deep_eye_adapter.execute_assessment(
                 target_url=target.target_url,
                 profile=assessment.assessment_profile,
                 allowed_paths=target.allowed_paths,
                 web_target_id=target.id,
+                extra_allowed_hosts=extra_hosts or None,
             )
 
             if not exec_result.success:
