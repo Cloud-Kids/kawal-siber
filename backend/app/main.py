@@ -32,36 +32,43 @@ _MAX_REQUEST_BODY_BYTES: int = 50 * 1024 * 1024  # 50 MB (accommodates PCAP uplo
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Create all tables at startup (idempotent, safe for dev/test)."""
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables ensured.")
+    from app.judge_mode import JUDGE_MODE
+    if JUDGE_MODE:
+        # Public judge env: judge.db is a read-only snapshot — skip all
+        # startup writes (create_all, stale-job reaper).
+        logger.info("Judge mode: skipping startup DB writes (read-only dataset).")
+    else:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables ensured.")
 
     # Reap orphaned background jobs: PCAP analyses stuck in RUNNING/PENDING
     # because the process restarted mid-task would otherwise show "MEMPROSES"
     # forever. Anything older than 15 minutes without completion is failed.
-    try:
-        from datetime import datetime, timedelta, timezone
-        from sqlalchemy import update
-        from app.models import PcapAnalysis
+    if not JUDGE_MODE:
+        try:
+            from datetime import datetime, timedelta, timezone
+            from sqlalchemy import update
+            from app.models import PcapAnalysis
 
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
-        with SessionLocal() as db:
-            result = db.execute(
-                update(PcapAnalysis)
-                .where(
-                    PcapAnalysis.status.in_(["RUNNING", "PENDING"]),
-                    PcapAnalysis.created_at < cutoff,
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+            with SessionLocal() as db:
+                result = db.execute(
+                    update(PcapAnalysis)
+                    .where(
+                        PcapAnalysis.status.in_(["RUNNING", "PENDING"]),
+                        PcapAnalysis.created_at < cutoff,
+                    )
+                    .values(
+                        status="FAILED",
+                        completed_at=datetime.now(timezone.utc),
+                        error_message="Analysis interrupted by service restart — please resubmit the PCAP file.",
+                    )
                 )
-                .values(
-                    status="FAILED",
-                    completed_at=datetime.now(timezone.utc),
-                    error_message="Analysis interrupted by service restart — please resubmit the PCAP file.",
-                )
-            )
-            db.commit()
-            if result.rowcount:
-                logger.warning("Reaped %d orphaned PCAP analyses.", result.rowcount)
-    except Exception:
-        logger.exception("Failed to reap orphaned PCAP analyses.")
+                db.commit()
+                if result.rowcount:
+                    logger.warning("Reaped %d orphaned PCAP analyses.", result.rowcount)
+        except Exception:
+            logger.exception("Failed to reap orphaned PCAP analyses.")
 
     yield
     logger.info("Application shutdown.")

@@ -40,6 +40,7 @@ services:
     environment:
       KAWAL_JUDGE_MODE: "true"
       DATABASE_URL: "sqlite:////data/judge.db"
+      KAWAL_STORAGE_ROOT: "/data"   # REPORTS_DIR=/data/reports inside ro mount
       FRONTEND_URL: "https://demo-kawal-siber.smkcloud.web.id"
       # No secrets: judge backend gets nothing sensitive.
     volumes:

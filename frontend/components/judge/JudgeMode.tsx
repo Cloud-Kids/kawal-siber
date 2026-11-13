@@ -18,7 +18,12 @@ export function JudgeBanner() {
 
 /** Client-side guard: blocks all mutating API calls in judge mode.
  *  Backend enforcement (403) remains the authoritative layer. */
-export function useJudgeGuard() {
+export function JudgeGuard() {
+  useJudgeGuard();
+  return null;
+}
+
+function useJudgeGuard() {
   useEffect(() => {
     if (!JUDGE_MODE) return;
     document.body.classList.add('judge-mode');

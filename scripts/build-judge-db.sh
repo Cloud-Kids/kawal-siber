@@ -38,3 +38,14 @@ chmod 444 "$DST"   # read-only file — extra belt & suspenders
 
 echo "judge.db built: $DST ($(stat -c%s "$DST") bytes, mode 444)"
 echo "Verify: sqlite3 $DST 'select count(*) from security_events;'"
+
+# 4. Copy sanitized report files into the judge storage tree so report
+#    download/preview work from the read-only mount.
+#    Expected layout: <outdir>/reports/*.pdf|json  (already sanitized upstream)
+REPORTS_SRC="${3:-}"
+if [ -n "$REPORTS_SRC" ] && [ -d "$REPORTS_SRC" ]; then
+  mkdir -p "$(dirname "$DST")/reports"
+  cp -r "$REPORTS_SRC"/. "$(dirname "$DST")/reports/"
+  chmod -R a-w "$(dirname "$DST")/reports"
+  echo "reports copied: $(find "$(dirname "$DST")/reports" -type f | wc -l) files"
+fi
