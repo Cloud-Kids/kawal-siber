@@ -119,6 +119,38 @@ async def judge_mode_guard(request: Request, call_next):  # type: ignore[type-ar
     return await call_next(request)
 
 
+# Naive ISO-8601 datetime inside a JSON string (no Z / no ±hh:mm offset).
+# SQLite CURRENT_TIMESTAMP stores UTC without zone info; make it explicit
+# so browsers don't parse it as local time.
+import re as _re
+
+_NAIVE_DT_RE = _re.compile(
+    r'("\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)(?=")'
+)
+
+
+@app.middleware("http")
+async def utc_timestamp_guard(request: Request, call_next):  # type: ignore[type-arg]
+    """Append Z to naive ISO datetimes in JSON responses (all stored times are UTC)."""
+    response = await call_next(request)
+    ctype = response.headers.get("content-type", "")
+    if "application/json" not in ctype:
+        return response
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+    text = body.decode("utf-8", errors="replace")
+    fixed = _NAIVE_DT_RE.sub(r"\1Z", text)
+    from starlette.responses import Response as _RawResponse
+    return _RawResponse(
+        content=fixed.encode("utf-8"),
+        status_code=response.status_code,
+        headers={k: v for k, v in response.headers.items()
+                 if k.lower() not in ("content-length", "content-type")},
+        media_type="application/json",
+    )
+
+
 @app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):  # type: ignore[type-arg]
     """Reject requests whose Content-Length exceeds 1 MB."""
