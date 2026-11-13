@@ -1147,8 +1147,11 @@ def test_refine_frontend_22_routes_manifest() -> None:
         for kr in key_routes:
             assert kr in all_routes, f"Key route {kr} missing from routes manifest"
 
-        # Check API rewrites
+        # Check API rewrites — Next.js 15.5 emits rewrites as a dict of
+        # {beforeFiles, afterFiles, fallback} lists (was a flat list in 15.3).
         rewrites = manifest.get("rewrites", [])
+        if isinstance(rewrites, dict):
+            rewrites = rewrites.get("beforeFiles", []) + rewrites.get("afterFiles", []) + rewrites.get("fallback", [])
         has_api_rewrite = any("/api/v1" in str(rw.get("source")) for rw in rewrites)
         assert has_api_rewrite, "API reverse proxy rewrite missing in Next.js manifest"
 
