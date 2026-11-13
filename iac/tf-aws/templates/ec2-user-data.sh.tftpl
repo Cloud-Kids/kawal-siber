@@ -127,5 +127,49 @@ SSHEOF
   echo "=== Application deployment initiated (build may take 10-20 min on 2 vCPU) ==="
 fi
 
+# --- 7. Cloudflare Tunnel (optional): zero public web ingress ------------------
+# When tunnel_token is set, cloudflared runs as a service and connects OUTBOUND
+# to Cloudflare edge — the Security Group opens no 80/443 ingress at all.
+# In the Zero Trust dashboard, add a Public Hostname pointing to
+# http://localhost:80 (the Nginx proxy container).
+if [ -n "${tunnel_token}" ]; then
+  echo "--- Installing cloudflared (Cloudflare Tunnel) ---"
+  install -m 0755 -d /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg
+  chmod a+r /usr/share/keyrings/cloudflare-main.gpg
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
+    > /etc/apt/sources.list.d/cloudflared.list
+  apt-get update -y
+  apt-get install -y cloudflared
+
+  # Token delivered via systemd EnvironmentFile (root-only) — never appears
+  # in `ps` output or the unit file itself.
+  cat > /etc/cloudflared.env <<'TOKENEOF'
+TUNNEL_TOKEN=${tunnel_token}
+TOKENEOF
+  chmod 600 /etc/cloudflared.env
+
+  cat > /etc/systemd/system/cloudflared.service <<'UNITEOF'
+[Unit]
+Description=Cloudflare Tunnel
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+EnvironmentFile=/etc/cloudflared.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+  systemctl daemon-reload
+  systemctl enable --now cloudflared
+  echo "cloudflared installed; configure Public Hostname -> http://localhost:80 in Zero Trust dashboard"
+fi
+
 echo "=== KAWAL SIBER bootstrap finished: $(date -Is) ==="
 echo "App URL: http://$(curl -s --max-time 2 http://169.254.169.254/latest/meta-data/public-ipv4 || echo '<public-ip>')/"

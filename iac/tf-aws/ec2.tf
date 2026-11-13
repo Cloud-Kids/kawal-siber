@@ -23,6 +23,7 @@ resource "aws_instance" "kawal_siber" {
     git_deploy_key   = var.app_deploy_enabled ? tls_private_key.git_deploy[0].private_key_openssh : ""
     git_access_token = var.git_access_token
     repo_https_url   = "https://github.com/Cloud-Kids/kawal-siber.git"
+    tunnel_token     = var.cloudflare_tunnel_token
   })
 
   # Root EBS volume — inline block, no separate volume/attachment resource.

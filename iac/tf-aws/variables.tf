@@ -120,3 +120,17 @@ variable "git_access_token" {
   sensitive   = true
   default     = ""
 }
+
+variable "cloudflare_tunnel_token" {
+  description = <<-EOT
+    Cloudflare Tunnel token (from Zero Trust → Networks → Tunnels →
+    your tunnel → Configure). When set, cloud-init installs cloudflared
+    as a service and the Security Group opens NO public web ports —
+    all HTTP/HTTPS traffic arrives via the outbound tunnel to
+    localhost:80. Stored in Terraform state and EC2 user-data.
+    Leave empty for direct public access via web_allowed_cidrs.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}

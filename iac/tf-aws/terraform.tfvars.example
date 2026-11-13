@@ -55,3 +55,10 @@ delete_on_termination = true  # WARNING: terraform destroy then DELETES the disk
 # git_access_token = "github_pat_..."
 #  B) leave git_access_token empty → Terraform generates an SSH deploy key;
 #     add `terraform output git_deploy_public_key` in GitHub → Deploy keys.
+
+# --- Cloudflare Tunnel (recommended for public access) ------------------------
+# Set to make the app reachable ONLY via Cloudflare Tunnel: zero public
+# 80/443 ingress on the Security Group, HTTPS terminated at Cloudflare edge.
+# Get the token: Zero Trust → Networks → Tunnels → <tunnel> → Configure.
+# Prefer $env:TF_VAR_cloudflare_tunnel_token instead of committing it here.
+# cloudflare_tunnel_token = "eyJ..."
