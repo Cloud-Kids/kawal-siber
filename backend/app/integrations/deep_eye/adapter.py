@@ -84,6 +84,7 @@ class DeepEyeAdapter:
         profile: str = "PASSIVE",
         allowed_paths: Optional[str] = None,
         web_target_id: int = 0,
+        extra_allowed_hosts: Optional[set] = None,
     ) -> AssessmentExecutionResult:
         """
         Executes web security assessment against authorized localhost target.
@@ -94,7 +95,9 @@ class DeepEyeAdapter:
 
         # Validate URL and scheme
         try:
-            scheme, hostname, port, normalized_url = parse_and_validate_target_url(target_url)
+            scheme, hostname, port, normalized_url = parse_and_validate_target_url(
+                target_url, extra_allowed_hosts=extra_allowed_hosts
+            )
         except Exception as exc:
             return AssessmentExecutionResult(
                 success=False,
