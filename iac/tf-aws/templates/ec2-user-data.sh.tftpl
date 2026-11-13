@@ -1,8 +1,10 @@
+#!/bin/bash
 # ==============================================================================
 # KAWAL SIBER — EC2 cloud-init / user-data bootstrap
-# Idempotent host preparation ONLY. No secrets, no app deployment.
+# Installs Docker, clones the repo (git auth via PAT or deploy key), and runs
+# the production Compose stack. NOTE: the shebang MUST be line 1 — cloud-init
+# only executes user-data as a script when it starts with #!.
 # ==============================================================================
-#!/bin/bash
 set -euo pipefail
 
 exec > >(tee -a /var/log/kawal-siber-bootstrap.log) 2>&1
