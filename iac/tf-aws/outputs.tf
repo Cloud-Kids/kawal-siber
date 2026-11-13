@@ -42,3 +42,8 @@ output "application_url" {
   description = "Application URL over HTTP. HTTPS requires a real domain + Caddy/Nginx cert on the host (see README)."
   value       = "http://${aws_instance.kawal_siber.public_ip}"
 }
+
+output "git_deploy_public_key" {
+  description = "Add this public key in GitHub → Settings → Deploy keys (read-only) so cloud-init can clone the private repo"
+  value       = var.app_deploy_enabled ? tls_private_key.git_deploy[0].public_key_openssh : ""
+}

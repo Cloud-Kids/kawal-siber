@@ -41,3 +41,8 @@ web_allowed_cidrs = ["203.0.113.10/32"]
 root_volume_size      = 100   # GiB, gp3
 root_volume_encrypted = true  # disable only if Learner Lab rejects encryption
 delete_on_termination = true  # WARNING: terraform destroy then DELETES the disk
+
+# --- Application auto-deploy (cloud-init clones repo + compose up) ------------
+# app_deploy_enabled = true   # set false for host-only bootstrap
+# repo_url           = "git@github.com:Cloud-Kids/kawal-siber.git"
+# repo_branch        = "main"

@@ -59,5 +59,45 @@ if command -v ufw >/dev/null 2>&1; then
   ufw --force enable || true
 fi
 
+# --- 6. Optional application deployment (clone + compose up) -------------------
+if [ "${app_deploy}" = "true" ]; then
+  echo "--- Deploying KAWAL SIBER application ---"
+
+  DEPLOY_KEY="/home/ubuntu/.ssh/kawal_siber_deploy"
+  install -d -m 0700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
+  cat > "$DEPLOY_KEY" <<'KEYEOF'
+${git_deploy_key}
+KEYEOF
+  chown ubuntu:ubuntu "$DEPLOY_KEY"
+  chmod 600 "$DEPLOY_KEY"
+
+  cat > /home/ubuntu/.ssh/config <<'SSHEOF'
+Host github.com
+  IdentityFile /home/ubuntu/.ssh/kawal_siber_deploy
+  IdentitiesOnly yes
+SSHEOF
+  chown ubuntu:ubuntu /home/ubuntu/.ssh/config
+  chmod 600 /home/ubuntu/.ssh/config
+
+  # Known hosts for github.com
+  ssh-keyscan -t ed25519,rsa github.com >> /home/ubuntu/.ssh/known_hosts 2>/dev/null || true
+  chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
+
+  APP_DIR="/opt/kawal-siber/app"
+  if [ ! -d "$APP_DIR/.git" ]; then
+    su - ubuntu -c "git clone --branch ${repo_branch} --recurse-submodules ${repo_url} $${APP_DIR}"
+  else
+    su - ubuntu -c "cd $${APP_DIR} && git fetch --all && git checkout ${repo_branch} && git pull && git submodule update --init --recursive"
+  fi
+
+  cd "$APP_DIR/deploy/single-instance"
+  # host storage bind mount target used by compose (../../storage)
+  install -d -m 0755 -o ubuntu -g ubuntu "$APP_DIR/storage/reports" "$APP_DIR/storage/pcaps"
+
+  su - ubuntu -c "cd $${APP_DIR}/deploy/single-instance && docker compose -f compose.single-instance.yaml -p kawal-siber up -d --build"
+
+  echo "=== Application deployment initiated (build may take 10-20 min on 2 vCPU) ==="
+fi
+
 echo "=== KAWAL SIBER bootstrap finished: $(date -Is) ==="
-echo "Next: clone the repo into /opt/kawal-siber/app and follow deploy/single-instance/README.md"
+echo "App URL: http://$(curl -s --max-time 2 http://169.254.169.254/latest/meta-data/public-ipv4 || echo '<public-ip>')/"
