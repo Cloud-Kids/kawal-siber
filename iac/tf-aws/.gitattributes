@@ -1,0 +1,4 @@
+# Shell/cloud-init templates MUST stay LF — CRLF breaks bash line continuations
+# and would corrupt EC2 user-data on Windows checkouts.
+*.tftpl text eol=lf
+*.sh    text eol=lf

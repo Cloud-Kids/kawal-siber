@@ -1,8 +1,10 @@
+#!/bin/bash
 # ==============================================================================
 # KAWAL SIBER — EC2 cloud-init / user-data bootstrap
-# Idempotent host preparation ONLY. No secrets, no app deployment.
+# Installs Docker, clones the repo (git auth via PAT or deploy key), and runs
+# the production Compose stack. NOTE: the shebang MUST be line 1 — cloud-init
+# only executes user-data as a script when it starts with #!.
 # ==============================================================================
-#!/bin/bash
 set -euo pipefail
 
 exec > >(tee -a /var/log/kawal-siber-bootstrap.log) 2>&1
@@ -63,40 +65,110 @@ fi
 if [ "${app_deploy}" = "true" ]; then
   echo "--- Deploying KAWAL SIBER application ---"
 
-  DEPLOY_KEY="/home/ubuntu/.ssh/kawal_siber_deploy"
-  install -d -m 0700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
-  cat > "$DEPLOY_KEY" <<'KEYEOF'
+  APP_DIR="/opt/kawal-siber/app"
+
+  if [ -n "${git_access_token}" ]; then
+    # HTTPS auth via fine-grained PAT (orgs may disable Deploy Keys).
+    # Token is stored in ubuntu's git credential store (mode 600) and is
+    # also present in this user-data / Terraform state — treat as secret.
+    install -d -m 0700 -o ubuntu -g ubuntu /home/ubuntu/.config/git
+    cat > /home/ubuntu/.git-credentials <<'CREDEOF'
+https://x-access-token:${git_access_token}@github.com
+CREDEOF
+    chown ubuntu:ubuntu /home/ubuntu/.git-credentials
+    chmod 600 /home/ubuntu/.git-credentials
+    su - ubuntu -c "git config --global credential.helper store"
+    GIT_URL="${repo_https_url}"
+    GIT_AUTH="token"
+  else
+    DEPLOY_KEY="/home/ubuntu/.ssh/kawal_siber_deploy"
+    install -d -m 0700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
+    cat > "$DEPLOY_KEY" <<'KEYEOF'
 ${git_deploy_key}
 KEYEOF
-  chown ubuntu:ubuntu "$DEPLOY_KEY"
-  chmod 600 "$DEPLOY_KEY"
+    chown ubuntu:ubuntu "$DEPLOY_KEY"
+    chmod 600 "$DEPLOY_KEY"
 
-  cat > /home/ubuntu/.ssh/config <<'SSHEOF'
+    cat > /home/ubuntu/.ssh/config <<'SSHEOF'
 Host github.com
   IdentityFile /home/ubuntu/.ssh/kawal_siber_deploy
   IdentitiesOnly yes
 SSHEOF
-  chown ubuntu:ubuntu /home/ubuntu/.ssh/config
-  chmod 600 /home/ubuntu/.ssh/config
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/config
+    chmod 600 /home/ubuntu/.ssh/config
 
-  # Known hosts for github.com
-  ssh-keyscan -t ed25519,rsa github.com >> /home/ubuntu/.ssh/known_hosts 2>/dev/null || true
-  chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
+    # Known hosts for github.com
+    ssh-keyscan -t ed25519,rsa github.com >> /home/ubuntu/.ssh/known_hosts 2>/dev/null || true
+    chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
 
-  APP_DIR="/opt/kawal-siber/app"
-  if [ ! -d "$APP_DIR/.git" ]; then
-    su - ubuntu -c "git clone --branch ${repo_branch} --recurse-submodules ${repo_url} $${APP_DIR}"
-  else
-    su - ubuntu -c "cd $${APP_DIR} && git fetch --all && git checkout ${repo_branch} && git pull && git submodule update --init --recursive"
+    GIT_URL="${repo_url}"
+    GIT_AUTH="deploy-key"
   fi
 
-  cd "$APP_DIR/deploy/single-instance"
-  # host storage bind mount target used by compose (../../storage)
-  install -d -m 0755 -o ubuntu -g ubuntu "$APP_DIR/storage/reports" "$APP_DIR/storage/pcaps"
+  echo "Git auth method: $GIT_AUTH"
 
-  su - ubuntu -c "cd $${APP_DIR}/deploy/single-instance && docker compose -f compose.single-instance.yaml -p kawal-siber up -d --build"
+  # NOTE: use runuser (not 'su -') so GIT_URL/APP_DIR set above are visible
+  # to the ubuntu user's commands — 'su -' starts a fresh login shell.
+  if [ ! -d "$APP_DIR/.git" ]; then
+    runuser -u ubuntu -- git clone --branch "${repo_branch}" --recurse-submodules "$${GIT_URL}" "$${APP_DIR}"
+  else
+    runuser -u ubuntu -- bash -c "cd '$${APP_DIR}' && git fetch --all && git checkout '${repo_branch}' && git pull && git submodule update --init --recursive"
+  fi
+
+  # host storage bind mount target used by compose (../../storage).
+  # Containers run as uid 1001 (appuser/worker/nextjs) — the bind-mounted
+  # /data MUST be writable by them or SQLite fails with
+  # "unable to open database file".
+  install -d -m 0755 -o 1001 -g 1001 "$APP_DIR/storage/reports" "$APP_DIR/storage/pcaps"
+  chown -R 1001:1001 "$APP_DIR/storage"
+
+  runuser -u ubuntu -- bash -c "cd '$${APP_DIR}/deploy/single-instance' && docker compose -f compose.single-instance.yaml -p kawal-siber up -d --build"
 
   echo "=== Application deployment initiated (build may take 10-20 min on 2 vCPU) ==="
+fi
+
+# --- 7. Cloudflare Tunnel (optional): zero public web ingress ------------------
+# When tunnel_token is set, cloudflared runs as a service and connects OUTBOUND
+# to Cloudflare edge — the Security Group opens no 80/443 ingress at all.
+# In the Zero Trust dashboard, add a Public Hostname pointing to
+# http://localhost:80 (the Nginx proxy container).
+if [ -n "${tunnel_token}" ]; then
+  echo "--- Installing cloudflared (Cloudflare Tunnel) ---"
+  install -m 0755 -d /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg
+  chmod a+r /usr/share/keyrings/cloudflare-main.gpg
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
+    > /etc/apt/sources.list.d/cloudflared.list
+  apt-get update -y
+  apt-get install -y cloudflared
+
+  # Token delivered via systemd EnvironmentFile (root-only) — never appears
+  # in `ps` output or the unit file itself.
+  cat > /etc/cloudflared.env <<'TOKENEOF'
+TUNNEL_TOKEN=${tunnel_token}
+TOKENEOF
+  chmod 600 /etc/cloudflared.env
+
+  cat > /etc/systemd/system/cloudflared.service <<'UNITEOF'
+[Unit]
+Description=Cloudflare Tunnel
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+EnvironmentFile=/etc/cloudflared.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+  systemctl daemon-reload
+  systemctl enable --now cloudflared
+  echo "cloudflared installed; configure Public Hostname -> http://localhost:80 in Zero Trust dashboard"
 fi
 
 echo "=== KAWAL SIBER bootstrap finished: $(date -Is) ==="

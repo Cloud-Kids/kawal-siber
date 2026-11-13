@@ -73,11 +73,21 @@ def _process_pcap_job(analysis_id: int, pcap_path: Path, db_session_factory) -> 
             # Ingest events from EVE JSON
             event_count = 0
             alert_count = 0
+            # Fingerprints are second-precision — distinct EVE records can
+            # legitimately share one. Track IDs seen in THIS run as well as
+            # the DB, or the second identical record violates the UNIQUE
+            # constraint on security_events.event_id and fails the analysis.
+            seen_event_ids = set()
 
             for raw_evt in stream_eve_json_file(eve_file):
+                event_id = raw_evt["event_id"]
+                if event_id in seen_event_ids:
+                    continue
+                seen_event_ids.add(event_id)
+
                 # Check for existing event_id to prevent duplicates
                 existing = db.execute(
-                    select(SecurityEvent.id).where(SecurityEvent.event_id == raw_evt["event_id"])
+                    select(SecurityEvent.id).where(SecurityEvent.event_id == event_id)
                 ).scalar_one_or_none()
                 if existing:
                     continue

@@ -151,8 +151,8 @@ jobs:
 
       - name: Validate Backend Dockerfile
         run: |
-          docker build --dry-run -t kawal-siber-backend:dryrun -f backend/Dockerfile backend || \
-          docker build -t kawal-siber-backend:dryrun -f backend/Dockerfile backend
+          docker build --dry-run -t kawal-siber-backend:dryrun -f backend/Dockerfile . || \
+          docker build -t kawal-siber-backend:dryrun -f backend/Dockerfile .
 
       - name: Validate Frontend Dockerfile
         run: |

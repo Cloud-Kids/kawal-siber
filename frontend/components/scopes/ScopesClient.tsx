@@ -69,8 +69,20 @@ export default function ScopesClient({ initialScopes }: ScopesClientProps) {
       return;
     }
 
+    const expiryDate = new Date(newExpiry);
+    if (Number.isNaN(expiryDate.getTime())) {
+      setErrorMsg('Format tanggal kedaluwarsa tidak valid.');
+      setIsSubmitting(false);
+      return;
+    }
+    if (expiryDate <= new Date()) {
+      setErrorMsg('Batas akhir otorisasi harus di masa depan.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      const expiryIso = new Date(newExpiry).toISOString();
+      const expiryIso = expiryDate.toISOString();
       const created = await createScanScope({
         name: newName.trim(),
         cidr: newCidr.trim(),

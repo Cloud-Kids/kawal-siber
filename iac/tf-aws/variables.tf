@@ -106,3 +106,31 @@ variable "repo_branch" {
   type        = string
   default     = "main"
 }
+
+variable "git_access_token" {
+  description = <<-EOT
+    GitHub token for cloning the PRIVATE repo during cloud-init.
+    Use a fine-grained PAT scoped to ONLY this repository with
+    Contents: Read-only permission (orgs may disable Deploy Keys).
+    Stored in Terraform state and EC2 user-data — treat as a secret:
+    pass via -var, TF_VAR_git_access_token env, or a gitignored
+    terraform.tfvars. Leave empty to skip git auth (public repos only).
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_tunnel_token" {
+  description = <<-EOT
+    Cloudflare Tunnel token (from Zero Trust → Networks → Tunnels →
+    your tunnel → Configure). When set, cloud-init installs cloudflared
+    as a service and the Security Group opens NO public web ports —
+    all HTTP/HTTPS traffic arrives via the outbound tunnel to
+    localhost:80. Stored in Terraform state and EC2 user-data.
+    Leave empty for direct public access via web_allowed_cidrs.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}

@@ -73,6 +73,10 @@ async function apiFetch<T>(
   const response = await fetch(url, {
     cache: 'no-store',
     ...options,
+    headers: {
+      ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options?.headers,
+    },
   });
   if (!response.ok) {
     let errorDetail = `${response.status} ${response.statusText}`;

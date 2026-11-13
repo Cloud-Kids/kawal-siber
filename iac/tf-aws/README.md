@@ -228,77 +228,85 @@ ssh -i "$env:USERPROFILE\.ssh\kawal-siber-key.pem" ubuntu@<public_ip>
 
 (Use the `ssh_command` output as reference; replace the key path.)
 
-### STEP 16 — Verify Docker bootstrap
+### STEP 16 — Verify Docker bootstrap & auto-deploy
 
-The `user_data` script logs to `/var/log/kawal-siber-bootstrap.log` and
-installs Docker Engine + Compose plugin. Verify:
+The `user_data` script logs to `/var/log/kawal-siber-bootstrap.log`.
+
+**Default behavior (`app_deploy_enabled = true`)**: cloud-init installs
+Docker Engine + Compose plugin, clones the repo into
+`/opt/kawal-siber/app` (with `--recurse-submodules`), creates the storage
+directories, and runs `docker compose -f compose.single-instance.yaml
+-p kawal-siber up -d --build` automatically. First image build on a
+2 vCPU instance takes ~10–20 minutes.
+
+Verify:
 
 ```bash
 sudo docker version
 sudo docker compose version
 systemctl is-enabled docker   # expected: enabled
+docker ps                     # reverse-proxy/frontend/backend/worker
+sudo tail -50 /var/log/kawal-siber-bootstrap.log
 ls -la /opt/kawal-siber/      # app, data, backups, storage/reports
 ```
 
-If Docker is missing, check the bootstrap log:
-`sudo tail -100 /var/log/kawal-siber-bootstrap.log` — most failures are apt
+If Docker is missing, check the bootstrap log — most failures are apt
 mirror timeouts; re-run the apt/docker steps manually.
 
-### STEP 17 — Clone the repository
+#### Git authentication for the private repo
+
+The repo is **private**, so cloud-init needs credentials to clone it.
+Two options — pick ONE:
+
+**Option A — fine-grained PAT (recommended; orgs may disable Deploy Keys)**
+
+1. GitHub → Settings → Developer settings → **Fine-grained tokens** →
+   Generate. Resource owner: `Cloud-Kids`. Repository access: **Only
+   select repositories → `kawal-siber`**. Permissions: **Contents:
+   Read-only**. Expiration: your choice.
+2. Supply it to Terraform — do NOT put it in a committed file:
+
+   ```powershell
+   $env:TF_VAR_git_access_token = "github_pat_..."
+   ```
+
+   or add `git_access_token = "github_pat_..."` to your local
+   `terraform.tfvars` (gitignored — verify it is NOT tracked).
+
+   The token is injected into user-data and stored in Terraform state.
+   On the instance it lands in `/home/ubuntu/.git-credentials`
+   (mode 600) via git's credential helper. Treat it as a secret:
+   revoke/rotate the PAT when the lab instance is destroyed.
+
+**Option B — SSH deploy key**
+
+Leave `git_access_token` empty. Terraform generates an ED25519 keypair;
+`terraform output git_deploy_public_key` gives you the public key — add
+it once in GitHub → repo **Settings → Deploy keys** (read-only). This
+only works if your org allows deploy keys (Cloud-Kids currently does
+not — prefer Option A).
+
+#### Manual fallback (app_deploy_enabled = false)
+
+If you disabled auto-deploy, run these steps yourself:
 
 ```bash
 cd /opt/kawal-siber/app
 sudo chown -R ubuntu:ubuntu /opt/kawal-siber
 git clone https://github.com/Cloud-Kids/kawal-siber.git .
-git submodule update --init --recursive
-```
+git submodule update --init --recursive   # public submodules, no auth needed
 
-> **Do NOT** embed a GitHub PAT in the remote URL. If the repo is private,
-> use a credential helper or deploy key instead.
-
-### STEP 18 — Configure runtime environment
-
-Create a `.env` on the host (never committed):
-
-```bash
 cd /opt/kawal-siber/app/deploy/single-instance
-cp .env.example .env 2>/dev/null || true   # if present; otherwise create it
-chmod 600 .env
+docker compose -f compose.single-instance.yaml config    # validate
+docker compose -f compose.single-instance.yaml build
+docker compose -f compose.single-instance.yaml up -d
 ```
 
-The exact required variables are listed in
-[`deploy/single-instance/README.md` §6](../../deploy/single-instance/README.md)
-(`DATABASE_URL`, `API_INTERNAL_URL`, `FRONTEND_URL`, `NODE_ENV`, `SCAN_ENABLED`,
-AI variables, etc.). Defaults work for initial testing.
+> **Do NOT** embed a GitHub PAT in the remote URL. If cloning manually
+> on a private repo, use `git clone https://github.com/...` with a
+> credential helper, or export `GIT_ASKPASS`.
 
-### STEP 19 — Prepare persistent storage
-
-```bash
-cd /opt/kawal-siber/app
-mkdir -p storage/reports storage/backups
-sudo chown -R ubuntu:ubuntu storage
-```
-
-The SQLite DB and reports live on the **host disk** — they survive container
-rebuilds. **Never** run `docker compose down -v`.
-
-### STEP 20 — Validate compose configuration
-
-```bash
-docker compose -f deploy/single-instance/compose.single-instance.yaml config
-```
-
-Review the resolved config for errors before building.
-
-### STEP 21 — Build and start
-
-```bash
-docker compose -f deploy/single-instance/compose.single-instance.yaml build
-docker compose -f deploy/single-instance/compose.single-instance.yaml up -d
-docker compose -f deploy/single-instance/compose.single-instance.yaml ps
-```
-
-### STEP 22 — Verify all components
+### STEP 17 — Verify all components
 
 ```bash
 # Reverse proxy health
@@ -310,7 +318,7 @@ docker compose -f deploy/single-instance/compose.single-instance.yaml ps
 # Expected services: reverse-proxy, frontend, backend, worker — all healthy
 ```
 
-### STEP 23 — Open the application
+### STEP 18 — Open the application
 
 Browse to `http://<public_ip>` (the `application_url` output). Access is
 restricted to `web_allowed_cidrs` — if you set your `/32`, only your IP can

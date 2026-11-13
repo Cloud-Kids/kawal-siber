@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import assets, health, incidents, monitoring, reports, scans, scopes, security_events, web_assessments
 from app.api.routes.incident_intelligence import ai_router, incident_ext_router, intelligence_router
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Create all tables at startup (idempotent, safe for dev/test)."""
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables ensured.")
+
+    # Reap orphaned background jobs: PCAP analyses stuck in RUNNING/PENDING
+    # because the process restarted mid-task would otherwise show "MEMPROSES"
+    # forever. Anything older than 15 minutes without completion is failed.
+    try:
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import update
+        from app.models import PcapAnalysis
+
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+        with SessionLocal() as db:
+            result = db.execute(
+                update(PcapAnalysis)
+                .where(
+                    PcapAnalysis.status.in_(["RUNNING", "PENDING"]),
+                    PcapAnalysis.created_at < cutoff,
+                )
+                .values(
+                    status="FAILED",
+                    completed_at=datetime.now(timezone.utc),
+                    error_message="Analysis interrupted by service restart — please resubmit the PCAP file.",
+                )
+            )
+            db.commit()
+            if result.rowcount:
+                logger.warning("Reaped %d orphaned PCAP analyses.", result.rowcount)
+    except Exception:
+        logger.exception("Failed to reap orphaned PCAP analyses.")
+
     yield
     logger.info("Application shutdown.")
 
