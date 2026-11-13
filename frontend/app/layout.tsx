@@ -1,6 +1,12 @@
 import type { Metadata } from 'next';
 import { Fira_Code, Fira_Sans } from 'next/font/google';
 import './globals.css';
+import { JudgeBanner, useJudgeGuard } from '@/components/judge/JudgeMode';
+
+function JudgeGuardMount() {
+  useJudgeGuard();
+  return null;
+}
 
 const firaSans = Fira_Sans({
   subsets: ['latin'],
@@ -33,6 +39,8 @@ export default function RootLayout({
   return (
     <html lang="id" className={`${firaSans.variable} ${firaCode.variable} dark`}>
       <body className="bg-[#0F172A] text-[#F8FAFC] antialiased">
+        <JudgeGuardMount />
+        <JudgeBanner />
         {children}
       </body>
     </html>

@@ -398,30 +398,33 @@ def download_report(
     if report.file_size:
         headers["Content-Length"] = str(report.file_size)
 
-    # Update download audit trail
-    try:
-        report.download_count = (report.download_count or 0) + 1
-        report.last_downloaded_at = datetime.now(timezone.utc)
-        db.commit()
+    # Update download audit trail — skipped in judge read-only mode
+    # (judge.db is mounted read-only; audit writes would fail).
+    from app.judge_mode import JUDGE_MODE
+    if not JUDGE_MODE:
+        try:
+            report.download_count = (report.download_count or 0) + 1
+            report.last_downloaded_at = datetime.now(timezone.utc)
+            db.commit()
 
-        actor, claimed_actor_meta = resolve_http_actor_attribution(
-            dict(request.headers) if request else None,
-            request.client.host if request and request.client else None,
-        )
-        download_detail = f"download_count={report.download_count}"
-        if claimed_actor_meta:
-            download_detail = f"{download_detail}; {claimed_actor_meta}"
+            actor, claimed_actor_meta = resolve_http_actor_attribution(
+                dict(request.headers) if request else None,
+                request.client.host if request and request.client else None,
+            )
+            download_detail = f"download_count={report.download_count}"
+            if claimed_actor_meta:
+                download_detail = f"{download_detail}; {claimed_actor_meta}"
 
-        append_audit_event(
-            report,
-            db,
-            "DOWNLOADED",
-            download_detail,
-            operator=actor,
-            commit=True,
-        )
-    except Exception:
-        logger.warning("Failed to update download audit for report %s", report.report_id)
+            append_audit_event(
+                report,
+                db,
+                "DOWNLOADED",
+                download_detail,
+                operator=actor,
+                commit=True,
+            )
+        except Exception:
+            logger.warning("Failed to update download audit for report %s", report.report_id)
 
     return FileResponse(
         path=str(safe_path),

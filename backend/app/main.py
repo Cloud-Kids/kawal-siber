@@ -80,8 +80,9 @@ app = FastAPI(
     lifespan=lifespan,
     # Disable default /docs and /redoc in production if needed via env;
     # keep enabled for development convenience.
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "true" else "/docs",
+    redoc_url=None if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "true" else "/redoc",
+    openapi_url=None if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "true" else "/openapi.json",
 )
 
 
@@ -100,6 +101,17 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Middleware: request body size limit (1 MB)
 # ---------------------------------------------------------------------------
+@app.middleware("http")
+async def judge_mode_guard(request: Request, call_next):  # type: ignore[type-arg]
+    """Public judge demo mode: deny-by-default read-only enforcement."""
+    from app.judge_mode import JUDGE_MODE, judge_guard
+    if JUDGE_MODE:
+        blocked = judge_guard(request)
+        if blocked is not None:
+            return blocked
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):  # type: ignore[type-arg]
     """Reject requests whose Content-Length exceeds 1 MB."""
