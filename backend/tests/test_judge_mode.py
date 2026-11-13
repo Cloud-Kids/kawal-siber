@@ -1,14 +1,19 @@
 """Tests for public judge read-only mode enforcement (KAWAL_JUDGE_MODE=true)."""
 from __future__ import annotations
 
-import os
 import pytest
-
-os.environ["KAWAL_JUDGE_MODE"] = "true"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app import judge_mode  # noqa: E402
 from app.main import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _enable_judge_mode(monkeypatch):
+    """Enable judge mode per-test without leaking env state to other suites."""
+    monkeypatch.setattr(judge_mode, "JUDGE_MODE", True)
+
 
 client = TestClient(app)
 API = "/api/v1"
