@@ -34,12 +34,14 @@ Production behavior unchanged: all gates keyed on `KAWAL_JUDGE_MODE`, unset in p
 
 `docker compose -f deploy/judge-demo/compose.judge.yaml config` → **VALID**
 
-- `judge-proxy`: `127.0.0.1:8081:8081` loopback-only; 128M/0.25cpu
-- `judge-backend`: no published ports; `storage/judge:/data:ro`; 512M/0.5cpu
+Verified against every requirement:
+- `judge-proxy`: `127.0.0.1:8081:8081` loopback-only; 128M/0.25cpu limit
+- `judge-backend`: **no published ports**; `storage/judge:/data:ro`; 512M/0.5cpu
 - `judge-frontend`: no published ports; 512M/0.5cpu; build arg `NEXT_PUBLIC_JUDGE_MODE=true`
-- No docker socket, no `privileged`, no prod DB mount, separate `judge_net`
-- nginx: `server_name demo-kawal-siber.smkcloud.web.id`, `default_server` → 444,
-  `limit_req_zone` 10r/s, `/docs|redoc|openapi.json` → 403, `noindex` headers
+- No docker socket, no `privileged`, no prod DB mount (`kawal_siber.db` absent), separate `judge_net` bridge
+- nginx: `server_name demo-kawal-siber.smkcloud.web.id`, `default_server` → 444 (unknown hostname rejected),
+  `limit_req_zone` 10r/s burst 20, `/docs|redoc|openapi.json` → 403, `noindex` headers,
+  `client_max_body_size 2M` (read-only demo needs no uploads)
 
 ## D. Cloudflare Configuration Readiness (instructions only — NOT applied)
 
