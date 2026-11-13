@@ -107,12 +107,35 @@ def _validate_strict_ip(value: str) -> str:
 
 
 def _validate_cidr(value: str) -> str:
-    """Validate that the value is a valid IPv4 or IPv6 CIDR."""
+    """Validate that the value is a valid IPv4 or IPv6 CIDR.
+
+    Tolerates common user input: bare IPs are normalized to /32 (IPv4) or
+    /128 (IPv6), and pasted URLs (``http://1.2.3.4/path``) are reduced to
+    their host before validation.
+    """
     stripped = value.strip()
     if not stripped:
         raise ValueError("CIDR must not be empty")
+
+    candidate = stripped
+    if "://" in candidate:
+        # Strip scheme://host/path?query#frag down to the hostname
+        candidate = candidate.split("://", 1)[1]
+        candidate = candidate.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0].strip()
+
+    # Tolerate "1.2.3.4:8080" style input (host:port without scheme)
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$", candidate):
+        candidate = candidate.split(":", 1)[0]
+
+    if "/" not in candidate:
+        try:
+            ip = ipaddress.ip_address(candidate)
+            candidate = f"{candidate}/{128 if ip.version == 6 else 32}"
+        except ValueError:
+            pass  # not a bare IP — let ip_network produce the real error
+
     try:
-        net = ipaddress.ip_network(stripped, strict=False)
+        net = ipaddress.ip_network(candidate, strict=False)
         return str(net)
     except ValueError as exc:
         raise ValueError(f"Invalid CIDR notation {stripped!r}: {exc}") from exc
