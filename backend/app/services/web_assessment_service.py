@@ -81,10 +81,18 @@ class WebAssessmentService:
             validate_scope_active(scope.enabled, scope.expires_at)
 
         # Validate URL and resolve components
-        protocol, hostname, port, normalized_url = parse_and_validate_target_url(
-            target_url=target_url,
-            extra_allowed_hosts=extra_hosts,
-        )
+        try:
+            protocol, hostname, port, normalized_url = parse_and_validate_target_url(
+                target_url=target_url,
+                extra_allowed_hosts=extra_hosts,
+            )
+        except TargetOutOfScopeError as exc:
+            if not asset_id:
+                raise TargetOutOfScopeError(
+                    f"{exc} To authorize a non-localhost host, register it as an "
+                    "Asset first (Manajemen Aset) and link it via asset_id."
+                ) from exc
+            raise
 
         web_target = WebTarget(
             asset_id=asset_id,
