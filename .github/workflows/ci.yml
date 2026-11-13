@@ -8,7 +8,12 @@ on:
   push:
     branches:
       - 'feature/**'
+      - 'fix/**'
       - develop
+
+# Least-privilege GITHUB_TOKEN — CI only needs to read the repo.
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
