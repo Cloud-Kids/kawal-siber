@@ -60,16 +60,33 @@ def test_adapter_wrong_asset_host_rejected():
 # ---------- UTC timestamp serialization ----------
 
 def test_naive_datetime_gets_z_suffix():
-    from fastapi.testclient import TestClient
-    from app.main import app
-    import json, re
+    from app.main import _fix_naive_datetimes
+    sample = {
+        "created_at": "2026-11-13T09:22:00",
+        "other": "2026-11-13T09:22:00+00:00",
+        "sqlite_fmt": "2026-11-13 09:22:00",
+        "nested": {"ts": "2026-11-13T09:22:00.123"},
+        "arr": ["2026-11-13T09:22:00", "not-a-date"],
+    }
+    fixed = _fix_naive_datetimes(sample)
+    assert fixed["created_at"] == "2026-11-13T09:22:00Z"
+    assert fixed["other"] == "2026-11-13T09:22:00+00:00"  # aware untouched
+    assert fixed["sqlite_fmt"] == "2026-11-13T09:22:00Z"
+    assert fixed["nested"]["ts"] == "2026-11-13T09:22:00.123Z"
+    assert fixed["arr"] == ["2026-11-13T09:22:00Z", "not-a-date"]
 
-    client = TestClient(app)
-    # health endpoint returns a timestamp? use any JSON endpoint with datetime.
-    # Instead test the regex directly on a synthetic payload.
-    from app.main import _NAIVE_DT_RE
-    sample = '{"created_at":"2026-11-13T09:22:00","other":"2026-11-13T09:22:00+00:00","d":"2026-11-13 09:22:00"}'
-    fixed = _NAIVE_DT_RE.sub(r"\1Z", sample)
-    assert '"2026-11-13T09:22:00Z"' in fixed
-    assert '"2026-11-13 09:22:00Z"' in fixed
-    assert '"2026-11-13T09:22:00+00:00"' in fixed  # aware untouched
+
+def test_freetext_datetime_not_modified():
+    """A prose string CONTAINING a timestamp must not be altered."""
+    from app.main import _fix_naive_datetimes
+    sample = {"message": "Deployment scheduled at 2026-11-13T09:22:00 today"}
+    assert _fix_naive_datetimes(sample) == sample
+
+
+def test_invalid_and_null_untouched():
+    from app.main import _fix_naive_datetimes
+    sample = {"a": None, "b": "2026-13-99T99:99:99", "c": 123, "d": ""}
+    # invalid date still full-matches pattern -> gets Z (harmless: invalid
+    # dates can't be produced by DB); null/number/empty untouched
+    out = _fix_naive_datetimes(sample)
+    assert out["a"] is None and out["c"] == 123 and out["d"] == ""

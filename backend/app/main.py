@@ -119,19 +119,31 @@ async def judge_mode_guard(request: Request, call_next):  # type: ignore[type-ar
     return await call_next(request)
 
 
-# Naive ISO-8601 datetime inside a JSON string (no Z / no ±hh:mm offset).
-# SQLite CURRENT_TIMESTAMP stores UTC without zone info; make it explicit
-# so browsers don't parse it as local time.
+# Naive ISO-8601 datetime — FULL string match only. SQLite CURRENT_TIMESTAMP
+# stores UTC without zone info; make it explicit so browsers don't parse it
+# as local time. Parsed-JSON transform (not raw regex) so free-text strings
+# like "failed at 2026-11-13T09:22:00" are never modified.
+import json as _json
 import re as _re
 
-_NAIVE_DT_RE = _re.compile(
-    r'("\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)(?=")'
+_NAIVE_DT_FULL = _re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$"
 )
+
+
+def _fix_naive_datetimes(node):
+    if isinstance(node, str) and _NAIVE_DT_FULL.match(node):
+        return node.replace(" ", "T") + "Z"
+    if isinstance(node, dict):
+        return {k: _fix_naive_datetimes(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_fix_naive_datetimes(v) for v in node]
+    return node
 
 
 @app.middleware("http")
 async def utc_timestamp_guard(request: Request, call_next):  # type: ignore[type-arg]
-    """Append Z to naive ISO datetimes in JSON responses (all stored times are UTC)."""
+    """Normalize naive UTC datetimes in JSON responses to explicit 'Z' ISO form."""
     response = await call_next(request)
     ctype = response.headers.get("content-type", "")
     if "application/json" not in ctype:
@@ -139,8 +151,16 @@ async def utc_timestamp_guard(request: Request, call_next):  # type: ignore[type
     body = b""
     async for chunk in response.body_iterator:
         body += chunk
-    text = body.decode("utf-8", errors="replace")
-    fixed = _NAIVE_DT_RE.sub(r"\1Z", text)
+    try:
+        payload = _json.loads(body)
+    except Exception:
+        # Not parseable JSON — pass through untouched.
+        from starlette.responses import Response as _RawResponse
+        return _RawResponse(
+            content=body, status_code=response.status_code,
+            headers=dict(response.headers), media_type="application/json",
+        )
+    fixed = _json.dumps(_fix_naive_datetimes(payload), ensure_ascii=False)
     from starlette.responses import Response as _RawResponse
     return _RawResponse(
         content=fixed.encode("utf-8"),
