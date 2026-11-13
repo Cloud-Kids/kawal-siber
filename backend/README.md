@@ -50,26 +50,34 @@ pip install -r backend/requirements.txt
 Configuration is loaded from environment variables or `.env`:
 
 ```ini
-# Local SQLite Database (Default)
+# SQLite database path (default: storage/kawal_siber.db)
 DATABASE_URL=sqlite:///storage/kawal_siber.db
 
-# Production PostgreSQL Database
-# DATABASE_URL=postgresql://kawal_user:password@ks-db-01:5432/kawal_siber
+# Production PostgreSQL (optional future migration)
+# DATABASE_URL=postgresql://user:pass@host:5432/kawal_siber
 
-# Security & Session
-SECRET_KEY=KawalSiberDevelopmentSecretKey2026!
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-
-# Network & Host
+# Allowed CORS origin for FastAPI backend
 FRONTEND_URL=http://127.0.0.1:3000
-TOOLS_AGENT_URL=http://127.0.0.1:9000
 
-# Connection Pool Sizing (PostgreSQL only)
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=10
-DB_POOL_TIMEOUT=30
-DB_POOL_RECYCLE=1800
+# AI Triage Engine
+AI_ENABLED=true
+AI_PROVIDER=auto            # auto | ollama | rule_based
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3
+AI_REQUEST_TIMEOUT=30
+
+# Deep Eye integration
+DEEP_EYE_ROOT=tools/deep-eye
+DEEP_EYE_TIMEOUT_SECONDS=120
+DEEP_EYE_RATE_LIMIT_RPS=2.0
+DEEP_EYE_REQUEST_BUDGET=50
+
+# Reporting engine
+REPORTS_STORAGE_PATH=storage/reports
+MAX_REPORT_SIZE_BYTES=52428800
+MAX_REPORT_RETRIES=3
+STALE_JOB_TIMEOUT_MINUTES=15
+REPORT_JOB_TIMEOUT_SECONDS=120
 
 # Storage & Logging
 PYTHONUNBUFFERED=1

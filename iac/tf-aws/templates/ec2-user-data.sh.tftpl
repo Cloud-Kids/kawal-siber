@@ -1,0 +1,63 @@
+# ==============================================================================
+# KAWAL SIBER — EC2 cloud-init / user-data bootstrap
+# Idempotent host preparation ONLY. No secrets, no app deployment.
+# ==============================================================================
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee -a /var/log/kawal-siber-bootstrap.log) 2>&1
+echo "=== KAWAL SIBER bootstrap started: $(date -Is) ==="
+
+export DEBIAN_FRONTEND=noninteractive
+
+# --- 1. Base packages ---------------------------------------------------------
+apt-get update -y
+apt-get install -y \
+  ca-certificates \
+  curl \
+  gnupg \
+  lsb-release \
+  git \
+  jq \
+  unzip \
+  htop \
+  ufw
+
+# --- 2. Docker official apt repository (idempotent) ----------------------------
+install -m 0755 -d /etc/apt/keyrings
+if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
+fi
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+  > /etc/apt/sources.list.d/docker.list
+
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# --- 3. Docker service: enable + start on boot --------------------------------
+systemctl enable --now docker
+usermod -aG docker ubuntu || true
+
+# --- 4. Application directory layout ------------------------------------------
+install -d -m 0755 -o ubuntu -g ubuntu /opt/kawal-siber/app
+install -d -m 0755 -o ubuntu -g ubuntu /opt/kawal-siber/data
+install -d -m 0755 -o ubuntu -g ubuntu /opt/kawal-siber/backups
+install -d -m 0755 -o ubuntu -g ubuntu /opt/kawal-siber/storage/reports
+
+# --- 5. Optional host firewall: allow SSH + web only --------------------------
+if command -v ufw >/dev/null 2>&1; then
+  ufw --force reset
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow 22/tcp
+  ufw allow 80/tcp
+  ufw allow 443/tcp
+  ufw --force enable || true
+fi
+
+echo "=== KAWAL SIBER bootstrap finished: $(date -Is) ==="
+echo "Next: clone the repo into /opt/kawal-siber/app and follow deploy/single-instance/README.md"

@@ -1,0 +1,17 @@
+# Terraform working dirs
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Never commit real variable files or secrets
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+*.auto.tfvars
+
+# Local tooling artifacts
+.tools/
+schema.json
+tf.zip

@@ -448,5 +448,5 @@ features: nesting=1,keyctl=1
 
 1. **Host-Level Single Point of Failure (SPOF)**: This architecture runs on one host. If the EC2 instance or Proxmox host fails, downtime occurs until the host restarts.
 2. **SQLite Concurrent Writer Limit**: SQLite supports multiple readers but serializes writes. This is well-suited for hackathon workloads, but large-scale enterprise deployments (>100 RPS) should transition to PostgreSQL.
-3. **Future Architecture**: The multi-instance AWS ECS / RDS / ALB redundancy design is preserved in [`deploy/aws-ec2/README.md`](../aws-ec2/README.md) and [`docs/deployment/aws-ec2/`](../../docs/deployment/aws-ec2/) as the **Level 2 Future Architecture**.
+3. **Future Architecture**: A multi-host High-Availability design (container redundancy, PostgreSQL replication, or managed services such as ECS/RDS) may be designed separately as a **future roadmap item**. The former six-EC2 and ECS-based deployment configurations were removed during the legacy infrastructure cleanup; no obsolete multi-instance specs are retained in this repository.
 

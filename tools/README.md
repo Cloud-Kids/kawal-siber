@@ -10,7 +10,7 @@ KAWAL SIBER integrates a hardened layer of open-source security utilities to pro
               │ Internal Authenticated HTTP REST (X-Agent-Key)
               ▼
   ┌────────────────────────────────────────────────────────┐
-  │ KAWAL SIBER TOOLS AGENT (ks-tools-01 / Container)      │
+  │ SECURITY EXECUTION LAYER (worker container)            │
   │                                                        │
   │  [ In-Container Scope & Policy Guard ]                 │
   │  ├── Re-validates target IPv4 against active CIDR      │
@@ -51,24 +51,30 @@ KAWAL SIBER integrates a hardened layer of open-source security utilities to pro
 
 ---
 
-## 3. Tools Agent Microservice Architecture
+## 3. Tools Agent Microservice Architecture (Future / Legacy)
 
-In distributed and containerized deployments (such as AWS EC2 `ks-tools-01`), security tools are isolated inside a dedicated container image:
+> [!NOTE]
+> The dedicated tools-agent container (`tools_agent.py`) belonged to the
+> former multi-host deployment topology and was removed during the legacy
+> infrastructure cleanup. It is **not** part of the active
+> single-instance stack — in the active architecture, Nmap/Suricata/Deep
+> Eye execution runs inside the `worker` container with the scope guards
+> described in §4. A dedicated tools-agent may return as part of a future
+> HA architecture.
 
-- **Source**: [`deploy/aws/ks-tools-01/agent/tools_agent.py`](../deploy/aws/ks-tools-01/agent/tools_agent.py)
-- **Dockerfile**: [`deploy/aws/ks-tools-01/Dockerfile`](../deploy/aws/ks-tools-01/Dockerfile)
-- **Listen Port**: `9000` (mapped to `9001` for `tools-agent-a` and `9002` for `tools-agent-b`).
-- **Authentication**: All endpoints require the `X-Agent-Key` HTTP header.
-- **Health Check**: `GET /health` returns engine availability and capacity metrics.
+Historical specification (for reference only):
+
+- **Listen Port**: `9000` (mapped to `9001`/`9002` per agent instance).
+- **Authentication**: All endpoints required the `X-Agent-Key` HTTP header.
+- **Health Check**: `GET /health` returned engine availability and capacity metrics.
 
 ---
 
 ## 4. Scope Validation & Defense Safeguards
 
-Every scan invocation must pass three layers of scope enforcement:
+Every scan invocation must pass layers of scope enforcement:
 1. **Frontend / API Layer**: The target IP/URL must belong to an active, unexpired `ScanScope` or `WebTarget`.
-2. **Worker Layer**: Re-evaluates CIDR boundaries before submitting the scan job.
-3. **In-Container Tools Agent Layer**: The agent validates the IP address independently via Python's `ipaddress` module:
+2. **Worker Layer**: Re-evaluates CIDR boundaries before submitting the scan job, and the scanner subprocess performs final in-process IP validation via Python's `ipaddress` module:
    - **Loopback Protection**: `127.0.0.0/8` is blocked.
    - **Cloud Metadata Protection**: `169.254.0.0/16` (including `169.254.169.254`) is strictly blocked.
    - **Multicast Protection**: `224.0.0.0/4` is blocked.

@@ -25,9 +25,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip pip-audit
           echo "Scanning backend dependencies..."
-          pip-audit -r kawal-siber/backend/requirements.txt || true
+          pip-audit -r backend/requirements.txt || true
           echo "Scanning worker dependencies..."
-          pip-audit -r kawal-siber/worker/requirements.txt || true
+          pip-audit -r worker/requirements.txt || true
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -35,8 +35,8 @@ jobs:
           node-version: '22'
 
       - name: Audit Node.js Frontend Dependencies (npm audit)
+        working-directory: frontend
         run: |
-          cd kawal-siber/frontend
           npm audit --audit-level=high || true
 
   container-security-scan:
@@ -48,7 +48,7 @@ jobs:
 
       - name: Build Backend Image for Scanning
         run: |
-          docker build -t kawal-siber-backend:scan -f kawal-siber/backend/Dockerfile kawal-siber/backend
+          docker build -t kawal-siber-backend:scan -f backend/Dockerfile backend
 
       - name: Run Trivy Vulnerability Scanner on Backend Image
         uses: aquasecurity/trivy-action@master
@@ -62,7 +62,7 @@ jobs:
 
       - name: Build Frontend Image for Scanning
         run: |
-          docker build -t kawal-siber-frontend:scan -f kawal-siber/frontend/Dockerfile kawal-siber/frontend
+          docker build -t kawal-siber-frontend:scan -f frontend/Dockerfile frontend
 
       - name: Run Trivy Vulnerability Scanner on Frontend Image
         uses: aquasecurity/trivy-action@master
@@ -73,4 +73,3 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
-

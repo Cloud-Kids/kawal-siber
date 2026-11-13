@@ -39,8 +39,6 @@ next-env.d.ts
 .env.test.local
 .env.production.local
 !.env.example
-!.env.docker
-!.env.aws.template
 
 # Operational Databases & Locks (STRICT ZERO-LEAK GUARD)
 *.db
@@ -86,6 +84,22 @@ models/*.gguf
 models/*.bin
 **/.ollama
 **/models/*.gguf
+
+# Terraform state, variables & working dirs (STRICT — never commit)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+terraform.tfvars.json
+*.auto.tfvars
+!terraform.tfvars.example
+crash.log
+crash.*.log
+
+# Private keys & certificates (STRICT — never commit)
+*.pem
+*.ppk
+*.key
 
 # OS & Editor Artefacts
 .DS_Store

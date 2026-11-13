@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from sqlalchemy import create_engine, event, select
+from sqlalchemy import ColumnElement, update
 from sqlalchemy.orm import Session, sessionmaker
 
 # Ensure app package is importable whether running standalone or inside Docker
@@ -50,31 +51,113 @@ def get_worker_sessionmaker(database_url: Optional[str] = None) -> sessionmaker[
     return sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
+def _claim_via_conditional_update(
+    db: Session,
+    model: type,
+    status_column: ColumnElement,
+    pending_value: str,
+    running_value: str,
+    order_by: list,
+    extra_values: Optional[dict] = None,
+):
+    """Atomically claim one pending record using a single conditional UPDATE.
+
+    Works identically on SQLite and PostgreSQL: the UPDATE's WHERE clause is
+    re-evaluated under the database write lock, so two concurrent consumers
+    cannot claim the same row — the loser simply updates 0 rows.
+
+    Returns the claimed ORM instance, or None when no pending record exists.
+    """
+    candidate_id = (
+        select(model.id)
+        .where(status_column == pending_value)
+        .order_by(*order_by)
+        .limit(1)
+        .scalar_subquery()
+    )
+    values: dict = {}
+    for key, val in {status_column: running_value, **(extra_values or {})}.items():
+        # Accept SQLAlchemy column attributes or plain string keys
+        values[getattr(key, "key", key)] = val
+    stmt = (
+        update(model)
+        .where(model.id == candidate_id)
+        .where(status_column == pending_value)
+        .values(**values)
+        .returning(model.id)
+    )
+    # SQLite serializes writers; a concurrent claim can surface as
+    # SQLITE_BUSY. Retry briefly instead of failing the poll cycle.
+    import time as _time
+    from sqlalchemy.exc import OperationalError
+    row = None
+    for attempt in range(5):
+        try:
+            row = db.execute(stmt).first()
+            db.commit()
+            break
+        except OperationalError as exc:
+            db.rollback()
+            if "locked" not in str(exc).lower() or attempt == 4:
+                raise
+            _time.sleep(0.05 * (attempt + 1))
+    if row is None:
+        return None
+    instance = db.get(model, row[0])
+    db.refresh(instance)
+    return instance
+
+
 def claim_next_pending_job(db: Session) -> Optional[ScanJob]:
     """
     Atomically query and claim the oldest PENDING scan job.
     Transitions status to RUNNING in the same transaction.
+
+    SQLite: single conditional ``UPDATE ... WHERE status='PENDING' RETURNING``
+    statement — safe under concurrent consumers (no SELECT-then-UPDATE race).
+    PostgreSQL: ``SELECT ... FOR UPDATE`` row lock, then conditional transition.
     """
+    dialect = db.get_bind().dialect.name if db.get_bind() is not None else ""
+    now = datetime.now(timezone.utc)
+
+    if dialect == "sqlite":
+        job = _claim_via_conditional_update(
+            db,
+            ScanJob,
+            ScanJob.status,
+            "PENDING",
+            "RUNNING",
+            [ScanJob.created_at.asc()],
+            extra_values={
+                "started_at": now,
+                "attempts": ScanJob.attempts + 1,
+            },
+        )
+        if job is not None:
+            logger.info("Claimed scan job id=%d for asset_id=%d", job.id, job.asset_id)
+        return job
+
     stmt = (
         select(ScanJob)
         .where(ScanJob.status == "PENDING")
         .order_by(ScanJob.created_at.asc())
         .limit(1)
-        .with_for_update() if db.bind and db.bind.dialect.name != "sqlite" else
-        select(ScanJob)
-        .where(ScanJob.status == "PENDING")
-        .order_by(ScanJob.created_at.asc())
-        .limit(1)
+        .with_for_update()
     )
 
     job = db.execute(stmt).scalar_one_or_none()
     if job is None:
         return None
 
-    job.status = "RUNNING"
-    job.started_at = datetime.now(timezone.utc)
-    job.attempts += 1
+    res = db.execute(
+        update(ScanJob)
+        .where(ScanJob.id == job.id, ScanJob.status == "PENDING")
+        .values(status="RUNNING", started_at=now, attempts=ScanJob.attempts + 1)
+    )
     db.commit()
+    if res.rowcount != 1:
+        db.rollback()
+        return None
     db.refresh(job)
 
     logger.info("Claimed scan job id=%d for asset_id=%d", job.id, job.asset_id)
@@ -187,19 +270,39 @@ def claim_next_pending_web_assessment(db: Session):
     Transitions status to RUNNING in the same transaction.
     """
     from app.models import WebAssessment
+    dialect = db.get_bind().dialect.name if db.get_bind() is not None else ""
+    now = datetime.now(timezone.utc)
+
+    if dialect == "sqlite":
+        assessment = _claim_via_conditional_update(
+            db, WebAssessment, WebAssessment.status, "PENDING", "RUNNING",
+            [WebAssessment.created_at.asc()],
+            extra_values={"started_at": now},
+        )
+        if assessment is not None:
+            logger.info("Claimed WebAssessment id=%d (target_id=%d, profile=%s)", assessment.id, assessment.web_target_id, assessment.assessment_profile)
+        return assessment
+
     stmt = (
         select(WebAssessment)
         .where(WebAssessment.status == "PENDING")
         .order_by(WebAssessment.created_at.asc())
         .limit(1)
+        .with_for_update()
     )
     assessment = db.execute(stmt).scalar_one_or_none()
     if assessment is None:
         return None
 
-    assessment.status = "RUNNING"
-    assessment.started_at = datetime.now(timezone.utc)
+    res = db.execute(
+        update(WebAssessment)
+        .where(WebAssessment.id == assessment.id, WebAssessment.status == "PENDING")
+        .values(status="RUNNING", started_at=now)
+    )
     db.commit()
+    if res.rowcount != 1:
+        db.rollback()
+        return None
     db.refresh(assessment)
     logger.info("Claimed WebAssessment id=%d (target_id=%d, profile=%s)", assessment.id, assessment.web_target_id, assessment.assessment_profile)
     return assessment
@@ -211,19 +314,39 @@ def claim_next_pending_ai_triage(db: Session):
     Transitions status to RUNNING in the same transaction.
     """
     from app.models import AITriageRun
+    dialect = db.get_bind().dialect.name if db.get_bind() is not None else ""
+    now = datetime.now(timezone.utc)
+
+    if dialect == "sqlite":
+        run = _claim_via_conditional_update(
+            db, AITriageRun, AITriageRun.status, "PENDING", "RUNNING",
+            [AITriageRun.created_at.asc()],
+            extra_values={"started_at": now},
+        )
+        if run is not None:
+            logger.info("Claimed AITriageRun id=%d for incident_id=%d", run.id, run.incident_id)
+        return run
+
     stmt = (
         select(AITriageRun)
         .where(AITriageRun.status == "PENDING")
         .order_by(AITriageRun.created_at.asc())
         .limit(1)
+        .with_for_update()
     )
     run = db.execute(stmt).scalar_one_or_none()
     if run is None:
         return None
 
-    run.status = "RUNNING"
-    run.started_at = datetime.now(timezone.utc)
+    res = db.execute(
+        update(AITriageRun)
+        .where(AITriageRun.id == run.id, AITriageRun.status == "PENDING")
+        .values(status="RUNNING", started_at=now)
+    )
     db.commit()
+    if res.rowcount != 1:
+        db.rollback()
+        return None
     db.refresh(run)
     logger.info("Claimed AITriageRun id=%d for incident_id=%d", run.id, run.incident_id)
     return run
@@ -236,18 +359,42 @@ def claim_next_pending_report(db: Session):
     Transitions status to RUNNING in the same transaction.
     """
     from app.models import GeneratedReport
+    dialect = db.get_bind().dialect.name if db.get_bind() is not None else ""
+    order_by = [GeneratedReport.job_priority.asc(), GeneratedReport.created_at.asc()]
+
+    if dialect == "sqlite":
+        report = _claim_via_conditional_update(
+            db, GeneratedReport, GeneratedReport.generation_status,
+            "PENDING", "RUNNING", order_by,
+        )
+        if report is not None:
+            logger.info(
+                "Claimed GeneratedReport id=%d (report_id=%s, type=%s, format=%s, priority=%s)",
+                report.id, report.report_id, report.report_type, report.format,
+                getattr(report, "job_priority", "?"),
+            )
+        return report
+
     stmt = (
         select(GeneratedReport)
         .where(GeneratedReport.generation_status == "PENDING")
-        .order_by(GeneratedReport.job_priority.asc(), GeneratedReport.created_at.asc())
+        .order_by(*order_by)
         .limit(1)
+        .with_for_update()
     )
     report = db.execute(stmt).scalar_one_or_none()
     if report is None:
         return None
 
-    report.generation_status = "RUNNING"
+    res = db.execute(
+        update(GeneratedReport)
+        .where(GeneratedReport.id == report.id, GeneratedReport.generation_status == "PENDING")
+        .values(generation_status="RUNNING")
+    )
     db.commit()
+    if res.rowcount != 1:
+        db.rollback()
+        return None
     db.refresh(report)
     logger.info(
         "Claimed GeneratedReport id=%d (report_id=%s, type=%s, format=%s, priority=%s)",
