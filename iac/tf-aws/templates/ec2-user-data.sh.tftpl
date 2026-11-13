@@ -115,8 +115,12 @@ SSHEOF
     runuser -u ubuntu -- bash -c "cd '$${APP_DIR}' && git fetch --all && git checkout '${repo_branch}' && git pull && git submodule update --init --recursive"
   fi
 
-  # host storage bind mount target used by compose (../../storage)
-  install -d -m 0755 -o ubuntu -g ubuntu "$APP_DIR/storage/reports" "$APP_DIR/storage/pcaps"
+  # host storage bind mount target used by compose (../../storage).
+  # Containers run as uid 1001 (appuser/worker/nextjs) — the bind-mounted
+  # /data MUST be writable by them or SQLite fails with
+  # "unable to open database file".
+  install -d -m 0755 -o 1001 -g 1001 "$APP_DIR/storage/reports" "$APP_DIR/storage/pcaps"
+  chown -R 1001:1001 "$APP_DIR/storage"
 
   runuser -u ubuntu -- bash -c "cd '$${APP_DIR}/deploy/single-instance' && docker compose -f compose.single-instance.yaml -p kawal-siber up -d --build"
 
