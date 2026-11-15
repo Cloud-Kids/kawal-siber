@@ -113,12 +113,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    pids_limit: 512
     deploy:
       resources:
         limits:
           cpus: "1.50"
           memory: 2048M
+          pids: 512
     healthcheck:
       test: ["CMD", "python", "-c", "import worker.queue, worker.config; print('worker modules importable')"]
       interval: 30s
