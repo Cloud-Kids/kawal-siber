@@ -1,7 +1,3 @@
-[submodule "tools/deep-eye"]
+﻿[submodule "tools/deep-eye"]
 	path = tools/deep-eye
 	url = https://github.com/zakirkun/deep-eye.git
-[submodule "tools/scanner-website"]
-	path = tools/scanner-website
-	url = https://github.com/kc0nk/Scanner-Website.git
-

@@ -6,6 +6,7 @@ and incident correlation for KAWAL SIBER.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -31,6 +32,13 @@ from app.models import (
 from app.services.scope_validator import validate_scope_active
 
 logger = logging.getLogger(__name__)
+
+# Judge interactive mode detection - read dynamically to support test-time environment changes
+def _is_judge_interactive_mode() -> bool:
+    return os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "interactive"
+
+# Allowed synthetic target for judge interactive mode
+JUDGE_SYNTHETIC_TARGET = "http://synthetic-target:8080"
 
 
 def map_vuln_to_attack_type(vuln_type: str, title: str) -> str:
@@ -64,6 +72,14 @@ class WebAssessmentService:
         """
         Validates target parameters and persists a new WebTarget.
         """
+        # Judge interactive mode: enforce synthetic target only
+        if _is_judge_interactive_mode():
+            normalized_url = target_url.rstrip("/")
+            if normalized_url != JUDGE_SYNTHETIC_TARGET.rstrip("/"):
+                raise TargetOutOfScopeError(
+                    f"Judge demo mode only allows the synthetic target: {JUDGE_SYNTHETIC_TARGET}"
+                )
+        
         # If asset_id is provided, verify asset existence
         asset = None
         extra_hosts = set()
