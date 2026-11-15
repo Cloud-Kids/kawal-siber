@@ -98,6 +98,7 @@ services:
       dockerfile: worker/Dockerfile
     container_name: kawal-siber-worker
     restart: unless-stopped
+    user: "1001:1001"
     environment:
       - DATABASE_URL=sqlite:////data/kawal_siber.db
       - SCAN_ENABLED=true
@@ -112,6 +113,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    pids_limit: 512
     deploy:
       resources:
         limits:
