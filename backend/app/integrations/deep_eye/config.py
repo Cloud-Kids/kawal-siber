@@ -38,6 +38,17 @@ DEFAULT_REQUEST_BUDGET = int(os.getenv("DEEP_EYE_REQUEST_BUDGET", "50"))
 DEFAULT_ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}
 DEFAULT_ALLOWED_PORTS = {80, 443, 3000, 8000, 8080, 8443, 5000, 8765}
 
+# Judge interactive mode: only allow synthetic target - read dynamically to support test-time changes
+def _get_allowed_hosts() -> set:
+    if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "interactive":
+        return {"synthetic-target"}
+    return DEFAULT_ALLOWED_HOSTS
+
+def _get_allowed_ports() -> set:
+    if os.environ.get("KAWAL_JUDGE_MODE", "").lower() == "interactive":
+        return {8080}
+    return DEFAULT_ALLOWED_PORTS
+
 # Assessment profiles specification
 PROFILES: Dict[str, Dict[str, Any]] = {
     "PASSIVE": {

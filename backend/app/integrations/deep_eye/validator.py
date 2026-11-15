@@ -11,7 +11,7 @@ import socket
 from typing import List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
-from app.integrations.deep_eye.config import DEFAULT_ALLOWED_HOSTS, DEFAULT_ALLOWED_PORTS
+from app.integrations.deep_eye.config import _get_allowed_hosts, _get_allowed_ports
 
 
 class WebValidationError(Exception):
@@ -77,7 +77,7 @@ def parse_and_validate_target_url(
         raise InvalidTargetURLError(f"Port {port} is out of valid range (1-65535).")
 
     # Scope / Localhost allowlist check
-    allowed_hosts = set(DEFAULT_ALLOWED_HOSTS)
+    allowed_hosts = set(_get_allowed_hosts())
     if extra_allowed_hosts:
         allowed_hosts.update(h.lower().strip() for h in extra_allowed_hosts)
 
@@ -181,7 +181,7 @@ def validate_redirect_url(redirect_url: str, base_host: str, extra_allowed_hosts
         if redirect_host == base_host.lower():
             return True
 
-        allowed = set(DEFAULT_ALLOWED_HOSTS)
+        allowed = set(_get_allowed_hosts())
         if extra_allowed_hosts:
             allowed.update(h.lower().strip() for h in extra_allowed_hosts)
 

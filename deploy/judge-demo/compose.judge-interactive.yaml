@@ -1,0 +1,226 @@
+# KAWAL SIBER — Public Judge Demo (INTERACTIVE MODE)
+#
+# Isolated stack for public judge demonstration with interactive features.
+# Runs alongside production on the same host but with complete isolation:
+#   - Separate writable database (judge.db)
+#   - Separate storage directory (storage/judge/)
+#   - Dedicated worker for background jobs
+#   - Dedicated synthetic target service
+#   - No production data, credentials, or queues
+#
+# Usage:
+#   docker compose -f deploy/judge-demo/compose.judge-interactive.yaml up -d --build
+#
+# Prerequisites:
+#   - Production stack running on ports 80/443
+#   - storage/judge/ directory exists with judge.db
+#   - Cloudflare Tunnel configured for demo hostname
+
+name: kawal-siber-judge-demo
+
+services:
+  # ---------------------------------------------------------------------------
+  # Judge Nginx Proxy — public ingress for demo hostname
+  # ---------------------------------------------------------------------------
+  judge-proxy:
+    image: nginx:1.27-alpine
+    container_name: kawal-siber-judge-proxy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:80"  # Localhost only — Cloudflare Tunnel connects here
+    volumes:
+      - ./judge-nginx-interactive.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      judge-frontend:
+        condition: service_started
+      judge-backend:
+        condition: service_healthy
+    networks:
+      - judge_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Judge Backend — FastAPI with interactive mode enabled
+  # ---------------------------------------------------------------------------
+  judge-backend:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    container_name: kawal-siber-judge-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite:////data/judge.db
+      - KAWAL_JUDGE_MODE=interactive
+      - KAWAL_STORAGE_ROOT=/data
+      - REPORTS_STORAGE_PATH=/data/reports
+      - PCAP_STORAGE_PATH=/data/pcaps
+      - SURICATA_STORAGE_PATH=/data/suricata
+      - DEEP_EYE_ROOT=/app/tools/deep-eye
+      - AI_ENABLED=true
+      - AI_PROVIDER=rule_based
+      - OLLAMA_BASE_URL=http://127.0.0.1:11434
+      - OLLAMA_MODEL=llama3.2:3b
+      - OLLAMA_TIMEOUT_SECONDS=30
+      - OLLAMA_MAX_RETRIES=1
+    volumes:
+      # Writable judge database and storage (NOT production)
+      - ../../storage/judge:/data
+      # Deep Eye submodule (read-only, if initialized)
+      - ../../tools/deep-eye:/app/tools/deep-eye:ro
+    depends_on:
+      synthetic-target:
+        condition: service_healthy
+    networks:
+      - judge_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Judge Frontend — Next.js with interactive mode enabled
+  # ---------------------------------------------------------------------------
+  judge-frontend:
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api/v1
+        NEXT_PUBLIC_JUDGE_MODE: "interactive"
+        API_INTERNAL_URL: http://judge-backend:8000
+    container_name: kawal-siber-judge-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - API_INTERNAL_URL=http://judge-backend:8000
+    depends_on:
+      judge-backend:
+        condition: service_healthy
+    networks:
+      - judge_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Judge Worker — Background job processor for scans, assessments, reports
+  # ---------------------------------------------------------------------------
+  judge-worker:
+    build:
+      context: ../..
+      dockerfile: worker/Dockerfile
+    container_name: kawal-siber-judge-worker
+    restart: unless-stopped
+    user: "1001:1001"
+    environment:
+      - DATABASE_URL=sqlite:////data/judge.db
+      - SCAN_ENABLED=true
+      - NMAP_PATH=/usr/bin/nmap
+      - NMAP_TIMEOUT_SECONDS=300
+      - KAWAL_STORAGE_ROOT=/data
+      - REPORTS_STORAGE_PATH=/data/reports
+      - PCAP_STORAGE_PATH=/data/pcaps
+      - SURICATA_STORAGE_PATH=/data/suricata
+      - DEEP_EYE_ROOT=/app/tools/deep-eye
+      - AI_ENABLED=true
+      - AI_PROVIDER=rule_based
+      - OLLAMA_BASE_URL=http://127.0.0.1:11434
+      - OLLAMA_MODEL=llama3.2:3b
+      - OLLAMA_TIMEOUT_SECONDS=30
+      - OLLAMA_MAX_RETRIES=1
+      - KAWAL_JUDGE_MODE=interactive
+    volumes:
+      # Writable judge database and storage (NOT production)
+      - ../../storage/judge:/data
+      # Deep Eye submodule (read-only, if initialized)
+      - ../../tools/deep-eye:/app/tools/deep-eye:ro
+    depends_on:
+      judge-backend:
+        condition: service_healthy
+      synthetic-target:
+        condition: service_healthy
+    networks:
+      - judge_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.path.exists('/tmp/worker_heartbeat')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Synthetic Target — Demo web application for assessments
+  # ---------------------------------------------------------------------------
+  synthetic-target:
+    build:
+      context: ./synthetic-target
+      dockerfile: Dockerfile
+    container_name: kawal-siber-synthetic-target
+    restart: unless-stopped
+    networks:
+      - judge_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  judge_net:
+    driver: bridge
+    internal: true  # TRUE isolation - no external network access
+    # NOTE: This provides complete network isolation. AI provider must be
+    # accessed via a local service or disabled. External AI access is NOT
+    # permitted in judge interactive mode for security.
