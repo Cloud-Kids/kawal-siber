@@ -2,16 +2,14 @@
 Integration tests for judge interactive mode core modules.
 Tests asset management, web targets, assessments, findings, incidents, and reports.
 """
-import os
 import pytest
 from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 
-# Set judge interactive mode for tests BEFORE importing app modules
-os.environ["KAWAL_JUDGE_MODE"] = "interactive"
 # Note: DATABASE_URL is set by conftest.py to use a temporary file-based SQLite database
 # This ensures proper isolation and table creation via Alembic migrations
 
+from app import judge_mode
 from app.main import app
 from app.database import get_db
 from app.models import Asset, WebTarget, WebAssessment, WebFinding, Incident, GeneratedReport
@@ -20,6 +18,14 @@ from app.models import Asset, WebTarget, WebAssessment, WebFinding, Incident, Ge
 # Use the client fixture from conftest.py which provides proper database isolation
 # The conftest.py client fixture uses db_session which has rollback isolation
 # and the create_test_tables session fixture ensures all tables exist
+
+
+@pytest.fixture(autouse=True)
+def _interactive_judge_mode(monkeypatch):
+    """Enable interactive judge mode per-test without leaking env/module state."""
+    monkeypatch.setenv("KAWAL_JUDGE_MODE", "interactive")
+    monkeypatch.setattr(judge_mode, "JUDGE_MODE", True)
+    monkeypatch.setattr(judge_mode, "JUDGE_INTERACTIVE", True)
 
 
 class TestAssetManagement:

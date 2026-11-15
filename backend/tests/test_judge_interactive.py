@@ -2,18 +2,14 @@
 Tests for judge_mode.py interactive mode enforcement.
 Tests write authorization, rate limiting, concurrency limits, and target validation.
 """
-import os
 import pytest
 from unittest.mock import Mock, patch
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-# Set interactive mode for tests
-os.environ["KAWAL_JUDGE_MODE"] = "interactive"
-
+from app import judge_mode
 from app.judge_mode import (
     judge_guard,
-    JUDGE_INTERACTIVE,
     _is_write_allowed,
     _validate_target_url,
     _rate_limited,
@@ -23,12 +19,20 @@ from app.judge_mode import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _interactive_judge_mode(monkeypatch):
+    """Enable interactive judge mode per-test without leaking env/module state."""
+    monkeypatch.setenv("KAWAL_JUDGE_MODE", "interactive")
+    monkeypatch.setattr(judge_mode, "JUDGE_MODE", True)
+    monkeypatch.setattr(judge_mode, "JUDGE_INTERACTIVE", True)
+
+
 class TestJudgeModeDetection:
     """Test judge mode detection."""
     
     def test_interactive_mode_detection(self):
         """Test that interactive mode is correctly detected."""
-        assert JUDGE_INTERACTIVE is True
+        assert judge_mode.JUDGE_INTERACTIVE is True
 
 
 class TestWriteAuthorization:
